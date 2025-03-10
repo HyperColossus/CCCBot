@@ -282,6 +282,10 @@ async def work(interaction: discord.Interaction):
     )
 
 # In your blackjack command, after validating the bet:
+def is_blackjack(hand):
+    """Return True if hand is a blackjack (exactly 2 cards with value 21)."""
+    return len(hand) == 2 and get_hand_value(hand) == 21
+
 @bot.tree.command(name="blackjack", description="Play a round of Blackjack using your Beaned Bucks.", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(bet="The amount of Beaned Bucks you want to bet")
 async def blackjack(interaction: discord.Interaction, bet: int):
@@ -301,25 +305,59 @@ async def blackjack(interaction: discord.Interaction, bet: int):
 
     # Create a new blackjack game.
     game = BlackjackGame(interaction.user, bet)
-    # Store the starting balance and remaining funds.
+    # Store starting balance and remaining funds.
     game.start_balance = balance
     game.remaining = balance - bet
 
+    # Check for blackjack immediately.
+    if is_blackjack(game.player_hand):
+        # Player has blackjack.
+        if is_blackjack(game.dealer_hand):
+            game.result = "tie"
+        else:
+            game.result = "win"
+            # Apply 1.5x multiplier.
+            game.bet = int(game.bet * 1.5)
+        content = render_game_state(game, final=True)
+        if game.result == "win":
+            outcome_text = f"Blackjack! You win {game.bet} Beaned Bucks!"
+        else:
+            outcome_text = "Both you and the dealer got blackjack. It's a tie!"
+        content += "\n\n" + outcome_text
+        await interaction.response.send_message(content=content, ephemeral=False)
+        
+        # Update the balance.
+        if game.result == "win":
+            user_record["balance"] = balance + game.bet
+            print(f"[Blackjack] User wins with blackjack. New balance should be {balance + game.bet}.")
+        else:
+            user_record["balance"] = balance  # tie, no change
+            print(f"[Blackjack] Game tied with blackjack. Balance remains {balance}.")
+        data[user_id] = user_record
+        save_data(data)
+        try:
+            await interaction.followup.send(f"Your new balance is {user_record['balance']} Beaned Bucks.", ephemeral=False)
+        except Exception as e:
+            print(f"[Blackjack] Error sending followup: {e}")
+        return
+
+    # If no immediate blackjack, proceed with the interactive view.
     content = render_game_state(game)
     view = BlackjackView(game)
+    # Making the game public; remove ephemeral if you want visibility.
     await interaction.response.send_message(content=content, view=view, ephemeral=False)
     await view.wait()
 
     # Update the player's balance using the updated game.bet.
     if game.result == "win":
-        user_record["balance"] = game.start_balance + game.bet
-        print(f"[Blackjack] User wins. New balance should be {game.start_balance + game.bet}.")
+        user_record["balance"] = balance + game.bet
+        print(f"[Blackjack] User wins. New balance should be {balance + game.bet}.")
     elif game.result == "lose":
-        user_record["balance"] = game.start_balance - game.bet
-        print(f"[Blackjack] User loses. New balance should be {game.start_balance - game.bet}.")
+        user_record["balance"] = balance - game.bet
+        print(f"[Blackjack] User loses. New balance should be {balance - game.bet}.")
     elif game.result == "tie":
         print("[Blackjack] Game tied. Balance remains unchanged.")
-        user_record["balance"] = game.start_balance
+        user_record["balance"] = balance
     else:
         print("[Blackjack] Game result not set. No balance change.")
 
@@ -328,7 +366,7 @@ async def blackjack(interaction: discord.Interaction, bet: int):
     print(f"[Blackjack] User record after game: {user_record}")
 
     try:
-        await interaction.followup.send(f"Your new balance is {user_record['balance']} Beaned Bucks.", ephemeral=True)
+        await interaction.followup.send(f"Your new balance is {user_record['balance']} Beaned Bucks.", ephemeral=False)
     except Exception as e:
         print(f"[Blackjack] Error sending followup message: {e}")
 
@@ -437,6 +475,46 @@ async def dailyboost(interaction: discord.Interaction):
         f"You worked as a booster and earned {reward} Beaned Bucks! Your new balance is {user_record['balance']}.",
         ephemeral=True
     )
+
+@bot.tree.command(
+    name="pay",
+    description="Transfer Beaned Bucks to another user.",
+    guild=discord.Object(id=GUILD_ID)
+)
+@app_commands.describe(user="The user to transfer Beaned Bucks to", amount="The amount of Beaned Bucks to transfer")
+async def pay(interaction: discord.Interaction, user: discord.Member, amount: int):
+    payer_id = str(interaction.user.id)
+    payee_id = str(user.id)
+    data = load_data()
+
+    # Ensure both payer and payee have an entry in the data.
+    if payer_id not in data:
+        data[payer_id] = {"balance": 0}
+    if payee_id not in data:
+        data[payee_id] = {"balance": 0}
+
+    # Check that the transfer amount is positive.
+    if amount <= 0:
+        await interaction.response.send_message("Transfer amount must be greater than 0.", ephemeral=True)
+        return
+
+    payer_balance = data[payer_id].get("balance", 0)
+    if payer_balance < amount:
+        await interaction.response.send_message("You do not have enough Beaned Bucks to complete this transfer.", ephemeral=True)
+        return
+
+    # Subtract from payer and add to payee.
+    data[payer_id]["balance"] = payer_balance - amount
+    payee_balance = data[payee_id].get("balance", 0)
+    data[payee_id]["balance"] = payee_balance + amount
+
+    save_data(data)
+
+    await interaction.response.send_message(
+        f"You have transferred {amount} Beaned Bucks to {user.display_name}.",
+        ephemeral=False
+    )
+
 # --- Voice State Update Event ---
 @bot.event
 async def on_voice_state_update(member, before, after):
