@@ -390,8 +390,51 @@ async def wheel(interaction: discord.Interaction, target: discord.Member):
         await interaction.response.send_message(f"{target.mention} has been timed out for {label}!")
     except Exception as e:
         print(f"Error during timeout: {e}")
+        
         await interaction.response.send_message("Failed to timeout the user. Check my permissions.", ephemeral=True)
+@bot.tree.command(
+    name="dailyboost",
+    description="Claim your daily booster reward (5,000-15,000 Beaned Bucks) if you are a Server Booster.",
+    guild=discord.Object(id=GUILD_ID)
+)
+async def dailyboost(interaction: discord.Interaction):
+    # Check if the user is a server booster.
+    if interaction.user.premium_since is None:
+        await interaction.response.send_message("You must be a Server Booster to claim this reward.", ephemeral=True)
+        return
 
+    data = load_data()
+    user_id = str(interaction.user.id)
+    now = datetime.datetime.now()
+    
+    # Retrieve or initialize user record with a separate field for daily boost.
+    user_record = data.get(user_id, {"balance": 0, "last_daily_boost": None})
+    last_boost_str = user_record.get("last_daily_boost")
+    
+    # Check if the user has already claimed their boost reward within 24 hours.
+    if last_boost_str:
+        last_boost = datetime.datetime.fromisoformat(last_boost_str)
+        if now - last_boost < datetime.timedelta(days=1):
+            remaining = datetime.timedelta(days=1) - (now - last_boost)
+            remaining_hours = remaining.seconds // 3600
+            remaining_minutes = (remaining.seconds % 3600) // 60
+            await interaction.response.send_message(
+                f"You have already claimed your daily booster reward. Try again in {remaining_hours} hours and {remaining_minutes} minutes.",
+                ephemeral=True
+            )
+            return
+
+    # Award a random boost reward between 5,000 and 15,000 Beaned Bucks.
+    reward = random.randint(5000, 15000)
+    user_record["balance"] += reward
+    user_record["last_daily_boost"] = now.isoformat()
+    data[user_id] = user_record
+    save_data(data)
+    
+    await interaction.response.send_message(
+        f"You worked as a booster and earned {reward} Beaned Bucks! Your new balance is {user_record['balance']}.",
+        ephemeral=True
+    )
 # --- Voice State Update Event ---
 @bot.event
 async def on_voice_state_update(member, before, after):
