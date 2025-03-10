@@ -393,9 +393,10 @@ async def wheel(interaction: discord.Interaction, target: discord.Member):
         print(f"Error during timeout: {e}")
 
         await interaction.response.send_message("Failed to timeout the user. Check my permissions.", ephemeral=True)
+
 @bot.tree.command(
     name="dailyboost",
-    description="Claim your daily booster reward (5,000-15,000 Beaned Bucks) if you are a Server Booster.",
+    description="Claim your daily booster reward (5,000-10,000 Beaned Bucks) every 24 hours)",
     guild=discord.Object(id=GUILD_ID)
 )
 async def dailyboost(interaction: discord.Interaction):
