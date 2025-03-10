@@ -234,6 +234,7 @@ async def help_command(interaction: discord.Interaction):
         "**/blackjack [bet]** - Play a round of Blackjack using your Beaned Bucks. Place a bet and then choose to Hit, Stand, or Double Down.\n\n"
         "**/work** - Work to earn a random amount between 1 and 250 Beaned Bucks (usable every 10 minutes).\n\n"
         "**/daily** - Claim your daily reward of 500-5000 Beaned bucks every 24 hours.\n\n"
+       "**dailyboost** - Claim your daily reward of 5000-10000 Beaned bucks every 24 hours. (server boosters only).\n\n"
         "**/balance [user]** - Check your Beaned Bucks balance. If no user is provided, it defaults to your own balance.\n\n"
         "**/wheel [target]** - Timeout a user randomly for various durations if you have enough Beaned Bucks or an allowed role.\n\n"
         "**/joinnotification** - Join the notif notifications channel.\n\n"
@@ -390,7 +391,7 @@ async def wheel(interaction: discord.Interaction, target: discord.Member):
         await interaction.response.send_message(f"{target.mention} has been timed out for {label}!")
     except Exception as e:
         print(f"Error during timeout: {e}")
-        
+
         await interaction.response.send_message("Failed to timeout the user. Check my permissions.", ephemeral=True)
 @bot.tree.command(
     name="dailyboost",
