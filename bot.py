@@ -709,11 +709,16 @@ async def daily(interaction: discord.Interaction):
         last_daily = datetime.datetime.fromisoformat(last_daily_str)
         if now - last_daily < datetime.timedelta(days=1):
             remaining = datetime.timedelta(days=1) - (now - last_daily)
-            remaining_minutes = remaining.seconds // 60
-            remaining_seconds = remaining.seconds % 60
+        
+            # Calculate the remaining hours, minutes, and seconds
+            remaining_hours = remaining.seconds // 3600  # Get the number of whole hours
+            remaining_minutes = (remaining.seconds % 3600) // 60  # Get the remaining minutes after hours are accounted for
+            remaining_seconds = remaining.seconds % 60  # Get the remaining seconds after minutes are accounted for
+        
+            # Send the response with the calculated time left
             await interaction.response.send_message(
-                f"You have already claimed your daily reward. Try again in {remaining_minutes} minutes and {remaining_seconds} seconds.",
-                ephemeral=True
+            f"You have already claimed your daily reward. Try again in {remaining_hours} hours, {remaining_minutes} minutes, and {remaining_seconds} seconds.",
+            ephemeral=True
             )
             return
 
