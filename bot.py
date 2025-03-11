@@ -30,7 +30,9 @@ DATA_FILE = "data.json"
 ALLOWED_ROLES = ["him"]
 STOCK_FILE = "stocks.json"
 STOCK_HISTORY_FILE = "stock_history.json"
-UPDATE_INTERVAL_MINUTES = 20 #changes stock interval
+UPDATE_INTERVAL_MINUTES = 20 #changes stock interva
+AFK_CHANNEL_ID = 574668552557297666
+
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -40,6 +42,25 @@ DIAMONDS = chr(9830)  # ♦
 SPADES   = chr(9824)  # ♠
 CLUBS    = chr(9827)  # ♣
 BACKSIDE = "backside"
+
+def update_active_vc_sessions_on_startup():
+    now = datetime.datetime.now()
+    guild = bot.get_guild(GUILD_ID)
+    if guild:
+        for channel in guild.voice_channels:
+            for member in channel.members:
+                if not member.bot:
+                    uid = str(member.id)
+                    if uid not in active_vc_sessions:
+                        #dtermine if the member is alone in this channel.
+                        non_bots = [m for m in channel.members if not m.bot]
+                        active_vc_sessions[uid] = {
+                            "join_time": now,
+                            "channel_id": channel.id,
+                            "last_alone_update": now if len(non_bots) == 1 else None,
+                            "alone_accumulated": datetime.timedelta(0)
+                        }
+                        print(f"Added {member.display_name} (ID: {uid}) to active VC sessions.")
 
 def load_stocks():
     try:
@@ -111,7 +132,7 @@ def update_stock_prices():
 
 @bot.tree.command(
     name="buy",
-    description="Invest a specified amount of Beaned Bucks to buy shares (fractional shares allowed). Use 'all' to invest your entire balance.",
+    description="Invest a specified amount of Beaned Bucks to buy shares. Use 'all' to invest your entire balance.",
     guild=discord.Object(id=GUILD_ID)
 )
 @app_commands.describe(
@@ -894,12 +915,10 @@ async def on_voice_state_update(member, before, after):
     now = datetime.datetime.now()
     uid = str(member.id)
 
-    # Helper: get non-bot members in a channel.
     def non_bot_members(channel):
         return [m for m in channel.members if not m.bot]
 
     # -- Notification for target user --
-    # If this is the target user, send the notif message when they join a VC.
     if member.id == TARGET_USER_ID:
         if before.channel is None and after.channel is not None:
             notif_channel = discord.utils.get(member.guild.text_channels, name="notif")
@@ -912,18 +931,22 @@ async def on_voice_state_update(member, before, after):
                 else:
                     await notif_channel.send(f"{role.mention} Alert: {member.mention} has joined a voice channel!")
 
-    # -- Voice Session Tracking for ALL Users --
+    #determine if the channel is the AFK channel.
+    def is_afk(channel):
+        return channel and channel.id == AFK_CHANNEL_ID
 
     #if a user joins a voice channel:
     if before.channel is None and after.channel is not None:
         channel = after.channel
         members = non_bot_members(channel)
         alone = (len(members) == 1)
+        #mark session as AFK if channel is the AFK channel.
         active_vc_sessions[uid] = {
-            "join_time": now,                   #when they joined
-            "channel_id": channel.id,           #the channel they joined
-            "last_alone_update": now if alone else None,  #when they became alone
-            "alone_accumulated": datetime.timedelta(0)    #total alone time accumulated so far
+            "join_time": now,
+            "channel_id": channel.id,
+            "last_alone_update": now if alone else None,
+            "alone_accumulated": datetime.timedelta(0),
+            "afk": is_afk(channel)
         }
     #if a user leaves a voice channel:
     elif before.channel is not None and after.channel is None:
@@ -934,14 +957,19 @@ async def on_voice_state_update(member, before, after):
             if session["last_alone_update"]:
                 alone_time += now - session["last_alone_update"]
             data = load_data()
-            record = data.get(uid, {"vc_time": 0, "vc_timealone": 0})
-            record["vc_time"] = record.get("vc_time", 0) + session_duration.total_seconds()
-            record["vc_timealone"] = record.get("vc_timealone", 0) + alone_time.total_seconds()
+            #if session was AFK, update "vc_afk"; else update normal VC times.
+            if session.get("afk"):
+                record = data.get(uid, {"vc_afk": 0})
+                record["vc_afk"] = record.get("vc_afk", 0) + session_duration.total_seconds()
+            else:
+                record = data.get(uid, {"vc_time": 0, "vc_timealone": 0})
+                record["vc_time"] = record.get("vc_time", 0) + session_duration.total_seconds()
+                record["vc_timealone"] = record.get("vc_timealone", 0) + alone_time.total_seconds()
             data[uid] = record
             save_data(data)
-    #if a user switches voice channels
+    #if a user switches voice channels:
     elif before.channel is not None and after.channel is not None:
-        #end the old session
+        #end the old session.
         session = active_vc_sessions.pop(uid, None)
         if session:
             session_duration = now - session["join_time"]
@@ -949,12 +977,17 @@ async def on_voice_state_update(member, before, after):
             if session["last_alone_update"]:
                 alone_time += now - session["last_alone_update"]
             data = load_data()
-            record = data.get(uid, {"vc_time": 0, "vc_timealone": 0})
-            record["vc_time"] = record.get("vc_time", 0) + session_duration.total_seconds()
-            record["vc_timealone"] = record.get("vc_timealone", 0) + alone_time.total_seconds()
+            #update the appropriate field based on whether it was AFK.
+            if session.get("afk"):
+                record = data.get(uid, {"vc_afk": 0})
+                record["vc_afk"] = record.get("vc_afk", 0) + session_duration.total_seconds()
+            else:
+                record = data.get(uid, {"vc_time": 0, "vc_timealone": 0})
+                record["vc_time"] = record.get("vc_time", 0) + session_duration.total_seconds()
+                record["vc_timealone"] = record.get("vc_timealone", 0) + alone_time.total_seconds()
             data[uid] = record
             save_data(data)
-        #start a new session in the new channel
+        #start a new session for the new channel.
         channel = after.channel
         members = non_bot_members(channel)
         alone = (len(members) == 1)
@@ -962,10 +995,11 @@ async def on_voice_state_update(member, before, after):
             "join_time": now,
             "channel_id": channel.id,
             "last_alone_update": now if alone else None,
-            "alone_accumulated": datetime.timedelta(0)
+            "alone_accumulated": datetime.timedelta(0),
+            "afk": is_afk(channel)
         }
 
-    #additionally update alone status for users in both the old and new channels
+    #additionally update alone status for users in both the before and after channels.
     for channel in [before.channel, after.channel]:
         if channel is None:
             continue
@@ -973,16 +1007,15 @@ async def on_voice_state_update(member, before, after):
         for m in members:
             s = active_vc_sessions.get(str(m.id))
             if s and s["channel_id"] == channel.id:
-                #if only one member is in the channel, mark as alone.
                 if len(members) == 1:
                     if s["last_alone_update"] is None:
                         s["last_alone_update"] = now
                 else:
-                    #if more than one member and they were marked as alone, accumulate the alone time.
                     if s["last_alone_update"]:
                         delta = now - s["last_alone_update"]
                         s["alone_accumulated"] += delta
                         s["last_alone_update"] = None
+
 
 @bot.tree.command(
     name="balance", 
@@ -1151,31 +1184,28 @@ async def roulette(interaction: discord.Interaction, bet: str, choice: str):
 #leaderboard command
 @bot.tree.command(
     name="leaderboard",
-    description="View the leaderboard. Categories: networth, time, or timealone.",
+    description="View the leaderboard. Categories: networth, time, timealone, or timeafk.",
     guild=discord.Object(id=GUILD_ID)
 )
-@app_commands.describe(category="Choose a category: networth, time, or timealone")
+@app_commands.describe(category="Choose a category: networth, time, timealone, or timeafk")
 async def leaderboard(interaction: discord.Interaction, category: str):
     category = category.lower()
-    data = load_data() 
+    data = load_data()
     leaderboard_list = []
 
     if category == "networth":
-        stock_prices = load_stocks() 
+        stock_prices = load_stocks()
         for user_id, record in data.items():
             balance = record.get("balance", 0)
             portfolio = record.get("portfolio", {})
-            portfolio_value = 0
-            for stock, shares in portfolio.items():
-                price = stock_prices.get(stock, 0)
-                portfolio_value += price * shares
+            portfolio_value = sum(stock_prices.get(stock, 0) * shares for stock, shares in portfolio.items())
             networth = balance + portfolio_value
             leaderboard_list.append((user_id, networth))
         leaderboard_list.sort(key=lambda x: x[1], reverse=True)
         title = "Net Worth Leaderboard"
     elif category == "time":
         for user_id, record in data.items():
-            vc_time = record.get("vc_time", 0)  #total time in vc
+            vc_time = record.get("vc_time", 0)
             leaderboard_list.append((user_id, vc_time))
         leaderboard_list.sort(key=lambda x: x[1], reverse=True)
         title = "Voice Channel Time Leaderboard"
@@ -1185,12 +1215,17 @@ async def leaderboard(interaction: discord.Interaction, category: str):
             leaderboard_list.append((user_id, vc_timealone))
         leaderboard_list.sort(key=lambda x: x[1], reverse=True)
         title = "Voice Channel Alone Time Leaderboard"
+    elif category == "timeafk":
+        for user_id, record in data.items():
+            vc_afk = record.get("vc_afk", 0)
+            leaderboard_list.append((user_id, vc_afk))
+        leaderboard_list.sort(key=lambda x: x[1], reverse=True)
+        title = "AFK Time Leaderboard"
     else:
-        await interaction.response.send_message("Invalid category. Please choose networth, time, or timealone.", ephemeral=True)
+        await interaction.response.send_message("Invalid category. Please choose networth, time, timealone, or timeafk.", ephemeral=True)
         return
 
     embed = discord.Embed(title=title, color=discord.Color.gold())
-    #display the top 10 entries
     count = 0
     for user_id, value in leaderboard_list[:10]:
         count += 1
@@ -1199,13 +1234,42 @@ async def leaderboard(interaction: discord.Interaction, category: str):
         if category == "networth":
             display_value = f"{value:.2f} Beaned Bucks"
         else:
-            #convert time
             hrs = value // 3600
             mins = (value % 3600) // 60
             secs = value % 60
             display_value = f"{int(hrs)}h {int(mins)}m {int(secs)}s"
         embed.add_field(name=f"{count}. {name}", value=display_value, inline=False)
     await interaction.response.send_message(embed=embed)
+
+
+@bot.tree.command(
+    name="exit",
+    description="Shut down the bot and update VC trackers. (Restricted to users with the 'him' role.)",
+    guild=discord.Object(id=GUILD_ID)
+)
+async def exit(interaction: discord.Interaction):
+    #check if the invoking user has the "him" role (case-insensitive).
+    if not any(role.name.lower() == "him" for role in interaction.user.roles):
+        await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
+        return
+
+    now = datetime.datetime.now()
+    data = load_data()
+    #process all active VC sessions.
+    for uid, session in list(active_vc_sessions.items()):
+        session_duration = now - session["join_time"]
+        alone_time = session["alone_accumulated"]
+        if session["last_alone_update"]:
+            alone_time += now - session["last_alone_update"]
+        record = data.get(uid, {"vc_time": 0, "vc_timealone": 0})
+        record["vc_time"] = record.get("vc_time", 0) + session_duration.total_seconds()
+        record["vc_timealone"] = record.get("vc_timealone", 0) + alone_time.total_seconds()
+        data[uid] = record
+        #remove this session from the active sessions.
+        del active_vc_sessions[uid]
+    save_data(data)
+    await interaction.response.send_message("Shutting down the bot and updating VC trackers...", ephemeral=True)
+    await bot.close()
 
 @bot.event
 async def on_ready():
@@ -1215,5 +1279,6 @@ async def on_ready():
         print(f"Synced {len(synced)} command(s).")
     except Exception as e:
         print(f"Error syncing commands: {e}")
+    update_active_vc_sessions_on_startup()
     stock_market_loop.start()
 bot.run(TOKEN)
