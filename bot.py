@@ -22,6 +22,7 @@ intents.voice_states = True
 with open("config.json", "r") as f:
     config = json.load(f)
 
+#globals
 TOKEN = config["token"]
 GUILD_ID = int(config["guild_id"])
 TARGET_MEMBER_ID = int(config["target_member_id"])
@@ -34,7 +35,7 @@ STOCK_HISTORY_FILE = "stock_history.json"
 UPDATE_INTERVAL_MINUTES = 20 #changes stock interva
 LOTTERY_FILE = "lottery.json"
 AFK_CHANNEL_ID = 574668552557297666
-
+current_market_event = None
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -94,39 +95,86 @@ def save_stock_history(history):
     with open(STOCK_HISTORY_FILE, "w") as f:
         json.dump(history, f, indent=4)
 
+def choose_new_market_event():
+    events = [
+        ("none", 0.90),
+        ("rally", 0.05),
+        ("crash", 0.05)
+    ]
+    total_weight = sum(weight for event, weight in events)
+    r = random.random() * total_weight
+    cumulative = 0
+    for event, weight in events:
+        cumulative += weight
+        if r < cumulative:
+            if event == "none":
+                return None
+            else:
+                #for chosen events, set a random duration
+                duration = random.randint(1, 4)
+                return {"event": event, "duration": duration}
+    return None
+
 def update_stock_prices():
-    data = load_stocks()         
-    history = load_stock_history()  
+    global current_market_event
+    data = load_stocks()
+    history = load_stock_history()
     now_iso = datetime.datetime.now().isoformat()
     changes = {}
+
+    #if no persistent event is active, always try to choose one.
+    if current_market_event is None:
+        current_market_event = choose_new_market_event()
+        if current_market_event:
+            print(f"[Market Event] New event started: {current_market_event}")
+        else:
+            print("[Market Event] No event this update.")
+            
+    event_type = current_market_event["event"] if current_market_event else None
+
     for stock, price in data.items():
         old_price = price
-        if random.random() < 0.01:  #1% chance of giant jump
-            jump_factor = random.uniform(0.5, 0.95)
-            if random.random() < 0.5:
-                new_price = price * (1 + jump_factor)
-            else:
-                new_price = price * (1 - jump_factor)
-            print(f"[Stock Market] {stock} BIG jump: {old_price} -> {new_price}")
-        else:
-            #regular jumps
-            change_percent = random.uniform(0.005, 0.05)
-            if random.random() < 0.5:
-                change_percent = -change_percent
+
+        if event_type == "rally":
+            #increase all stocks by 10-30%.
+            change_percent = random.uniform(0.10, 0.30)
             new_price = price * (1 + change_percent)
+        elif event_type == "crash":
+            #decrease all stocks by 10-30%
+            change_percent = random.uniform(0.10, 0.30)
+            new_price = price * (1 - change_percent)
+        else:
+            #normal update.
+            if random.random() < 0.01:
+                jump_factor = random.uniform(0.5, 0.95)
+                if random.random() < 0.5:
+                    new_price = price * (1 + jump_factor)
+                else:
+                    new_price = price * (1 - jump_factor)
+            else:
+                change_percent = random.uniform(0.005, 0.05)
+                if random.random() < 0.5:
+                    change_percent = -change_percent
+                new_price = price * (1 + change_percent)
+
         new_price = max(round(new_price, 2), 0.01)
         data[stock] = new_price
 
-        #compute absolute and percentage change.
         absolute_change = round(new_price - old_price, 2)
         percent_change = round(((new_price - old_price) / old_price) * 100, 2) if old_price != 0 else 0
         changes[stock] = {"old": old_price, "new": new_price, "abs": absolute_change, "perc": percent_change}
 
-        #append the new price to history.
         if stock not in history:
             history[stock] = []
         history[stock].append({"timestamp": now_iso, "price": new_price})
-    
+
+    #if an event is active, decrease its duration.
+    if current_market_event:
+        current_market_event["duration"] -= 1
+        if current_market_event["duration"] <= 0:
+            print(f"[Market Event] Event ended: {current_market_event}")
+            current_market_event = None
+
     save_stocks(data)
     save_stock_history(history)
     print("Stock prices updated:", data)
@@ -498,13 +546,6 @@ class BlackjackView(discord.ui.View):
         await self.end_game(interaction)
 
 #background task that updates the stock market periodically.
-@tasks.loop(minutes=UPDATE_INTERVAL_MINUTES)
-async def stock_market_loop():
-    update_stock_prices()
-
-@stock_market_loop.before_loop
-async def before_stock_loop():
-    await bot.wait_until_ready()
 
 @tasks.loop(minutes=UPDATE_INTERVAL_MINUTES)
 async def stock_market_loop():
@@ -538,7 +579,9 @@ async def stock_market_loop():
     else:
         print("Channel '#stocks' not found.")
 
-
+@stock_market_loop.before_loop
+async def before_stock_loop():
+    await bot.wait_until_ready()
 
 @bot.tree.command(
     name="stocks",
