@@ -550,7 +550,8 @@ async def help_command(interaction: discord.Interaction):
         "**/stock [stock name]** - Checks the entire stock market, if stock name is included check that stocks history\n\n"
         "**/buystock [stock] [price]** - Buys an amount of stock equal to your price.\n\n"
         "**/sellstock [stock] [price]** - Sells an amount of stock equal to your price.\n\n"
-        "**/roulette [amount] [bet]** - Plays a game of roulette with your amount and bet."
+        "**/roulette [amount] [bet]** - Plays a game of roulette with your amount and bet.\n\n"
+        "**/leaderboard [type]** - Lets you view either the networth, time in vc, or time in vc alone leaderboard."
     )
     await interaction.response.send_message(help_text, ephemeral=True)
 

@@ -16,3 +16,4 @@ Features these commands so far,
         /sellstocks [stock] [amount] - Sells an amount of stock equal to your value.
         /stock [name] - Views the entire stock market, if a name is included view the history of that stock.
         /roulette [amount] [bet] - Plays a game of roulette with your amount and bet.
+        /leaderboard [type] - Lets you view either the networth, time in vc, or time in vc alone leaderboard.
