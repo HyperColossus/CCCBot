@@ -7,6 +7,10 @@ import random
 import datetime
 import asyncio
 from typing import Optional
+import datetime
+
+#keys are user IDs (as strings), values are dicts with session data. tracks active VCs
+active_vc_sessions = {}
 
 
 #sset up intents
@@ -826,18 +830,98 @@ async def pay(interaction: discord.Interaction, user: discord.Member, amount: in
 # --- Voice State Update Event ---
 @bot.event
 async def on_voice_state_update(member, before, after):
-    if member.id != TARGET_USER_ID:
-        return
+    now = datetime.datetime.now()
+    uid = str(member.id)
+
+    # Helper: get non-bot members in a channel.
+    def non_bot_members(channel):
+        return [m for m in channel.members if not m.bot]
+
+    # -- Notification for target user --
+    # If this is the target user, send the notif message when they join a VC.
+    if member.id == TARGET_USER_ID:
+        if before.channel is None and after.channel is not None:
+            notif_channel = discord.utils.get(member.guild.text_channels, name="notif")
+            if notif_channel is None:
+                print("Channel #notif not found.")
+            else:
+                role = discord.utils.get(member.guild.roles, name="notif")
+                if role is None:
+                    print("Role 'notif' not found.")
+                else:
+                    await notif_channel.send(f"{role.mention} Alert: {member.mention} has joined a voice channel!")
+
+    # -- Voice Session Tracking for ALL Users --
+
+    # If a user joins a voice channel:
     if before.channel is None and after.channel is not None:
-        notif_channel = discord.utils.get(member.guild.text_channels, name="notif")
-        if notif_channel is None:
-            print("Channel #notif not found.")
-            return
-        role = discord.utils.get(member.guild.roles, name="notif")
-        if role is None:
-            print("Role 'notif' not found.")
-            return
-        await notif_channel.send(f"{role.mention} Alert: {member.mention} has joined a voice channel!")
+        channel = after.channel
+        members = non_bot_members(channel)
+        alone = (len(members) == 1)
+        active_vc_sessions[uid] = {
+            "join_time": now,                   # When they joined
+            "channel_id": channel.id,           # The channel they joined
+            "last_alone_update": now if alone else None,  # When they became alone (if applicable)
+            "alone_accumulated": datetime.timedelta(0)    # Total alone time accumulated so far
+        }
+    # If a user leaves a voice channel:
+    elif before.channel is not None and after.channel is None:
+        session = active_vc_sessions.pop(uid, None)
+        if session:
+            session_duration = now - session["join_time"]
+            alone_time = session["alone_accumulated"]
+            if session["last_alone_update"]:
+                alone_time += now - session["last_alone_update"]
+            data = load_data()
+            record = data.get(uid, {"vc_time": 0, "vc_timealone": 0})
+            record["vc_time"] = record.get("vc_time", 0) + session_duration.total_seconds()
+            record["vc_timealone"] = record.get("vc_timealone", 0) + alone_time.total_seconds()
+            data[uid] = record
+            save_data(data)
+    # If a user switches voice channels:
+    elif before.channel is not None and after.channel is not None:
+        # End the old session.
+        session = active_vc_sessions.pop(uid, None)
+        if session:
+            session_duration = now - session["join_time"]
+            alone_time = session["alone_accumulated"]
+            if session["last_alone_update"]:
+                alone_time += now - session["last_alone_update"]
+            data = load_data()
+            record = data.get(uid, {"vc_time": 0, "vc_timealone": 0})
+            record["vc_time"] = record.get("vc_time", 0) + session_duration.total_seconds()
+            record["vc_timealone"] = record.get("vc_timealone", 0) + alone_time.total_seconds()
+            data[uid] = record
+            save_data(data)
+        # Start a new session in the new channel.
+        channel = after.channel
+        members = non_bot_members(channel)
+        alone = (len(members) == 1)
+        active_vc_sessions[uid] = {
+            "join_time": now,
+            "channel_id": channel.id,
+            "last_alone_update": now if alone else None,
+            "alone_accumulated": datetime.timedelta(0)
+        }
+
+    # Additionally, update alone status for users in both the old and new channels.
+    for channel in [before.channel, after.channel]:
+        if channel is None:
+            continue
+        members = non_bot_members(channel)
+        for m in members:
+            s = active_vc_sessions.get(str(m.id))
+            if s and s["channel_id"] == channel.id:
+                # If only one member is in the channel, mark as alone.
+                if len(members) == 1:
+                    if s["last_alone_update"] is None:
+                        s["last_alone_update"] = now
+                else:
+                    # If more than one member and they were marked as alone, accumulate the alone time.
+                    if s["last_alone_update"]:
+                        delta = now - s["last_alone_update"]
+                        s["alone_accumulated"] += delta
+                        s["last_alone_update"] = None
 
 @bot.tree.command(
     name="balance", 
@@ -993,6 +1077,65 @@ async def roulette(interaction: discord.Interaction, bet: float, choice: str):
     save_data(data)
 
     embed.set_footer(text=f"New Balance: {user_record['balance']} Beaned Bucks")
+    await interaction.response.send_message(embed=embed)
+
+#leaderboard command
+@bot.tree.command(
+    name="leaderboard",
+    description="View the leaderboard. Categories: networth, time, or timealone.",
+    guild=discord.Object(id=GUILD_ID)
+)
+@app_commands.describe(category="Choose a category: networth, time, or timealone")
+async def leaderboard(interaction: discord.Interaction, category: str):
+    category = category.lower()
+    data = load_data() 
+    leaderboard_list = []
+
+    if category == "networth":
+        stock_prices = load_stocks() 
+        for user_id, record in data.items():
+            balance = record.get("balance", 0)
+            portfolio = record.get("portfolio", {})
+            portfolio_value = 0
+            for stock, shares in portfolio.items():
+                price = stock_prices.get(stock, 0)
+                portfolio_value += price * shares
+            networth = balance + portfolio_value
+            leaderboard_list.append((user_id, networth))
+        leaderboard_list.sort(key=lambda x: x[1], reverse=True)
+        title = "Net Worth Leaderboard"
+    elif category == "time":
+        for user_id, record in data.items():
+            vc_time = record.get("vc_time", 0)  #total time in vc
+            leaderboard_list.append((user_id, vc_time))
+        leaderboard_list.sort(key=lambda x: x[1], reverse=True)
+        title = "Voice Channel Time Leaderboard"
+    elif category == "timealone":
+        for user_id, record in data.items():
+            vc_timealone = record.get("vc_timealone", 0)
+            leaderboard_list.append((user_id, vc_timealone))
+        leaderboard_list.sort(key=lambda x: x[1], reverse=True)
+        title = "Voice Channel Alone Time Leaderboard"
+    else:
+        await interaction.response.send_message("Invalid category. Please choose networth, time, or timealone.", ephemeral=True)
+        return
+
+    embed = discord.Embed(title=title, color=discord.Color.gold())
+    #display the top 10 entries
+    count = 0
+    for user_id, value in leaderboard_list[:10]:
+        count += 1
+        member = interaction.guild.get_member(int(user_id))
+        name = member.display_name if member else f"User {user_id}"
+        if category == "networth":
+            display_value = f"{value:.2f} Beaned Bucks"
+        else:
+            #convert time
+            hrs = value // 3600
+            mins = (value % 3600) // 60
+            secs = value % 60
+            display_value = f"{int(hrs)}h {int(mins)}m {int(secs)}s"
+        embed.add_field(name=f"{count}. {name}", value=display_value, inline=False)
     await interaction.response.send_message(embed=embed)
 
 @bot.event
