@@ -109,58 +109,61 @@ def update_stock_prices():
     print("Stock prices updated:", data)
     return changes
 
-
 @bot.tree.command(
     name="buy",
-    description="Invest a specified amount of Beaned Bucks to buy shares (fractional shares allowed).",
+    description="Invest a specified amount of Beaned Bucks to buy shares (fractional shares allowed). Use 'all' to invest your entire balance.",
     guild=discord.Object(id=GUILD_ID)
 )
 @app_commands.describe(
     stock="The stock symbol to buy (e.g. ACME)",
-    amount="The amount of Beaned Bucks you want to invest"
+    amount="The amount of Beaned Bucks you want to invest (or 'all')"
 )
-async def buy(interaction: discord.Interaction, stock: str, amount: float):
-    if amount <= 0:
-        await interaction.response.send_message("Investment amount must be greater than 0.", ephemeral=True)
-        return
-
-    stocks_data = load_stocks()  
+async def buy(interaction: discord.Interaction, stock: str, amount: str):
+    stocks_data = load_stocks()
     stock = stock.upper()
     if stock not in stocks_data:
         await interaction.response.send_message("Invalid stock symbol.", ephemeral=True)
         return
 
     price = stocks_data[stock]
-    shares = amount / price  
-
     data = load_data()
     user_id = str(interaction.user.id)
-    #initialize portfolio and tracking fields if they don't exist.
     user_record = data.get(user_id, {"balance": 0, "portfolio": {}, "total_spent": 0, "total_earned": 0})
-    current_balance = user_record.get("balance", 0)
+    current_balance = float(user_record.get("balance", 0))
 
-    if current_balance < amount:
-        await interaction.response.send_message(
-            f"You do not have enough Beaned Bucks to invest {amount}.", ephemeral=True
-        )
+    #determine investment amount.
+    if amount.lower() == "all":
+        invest_amount = current_balance
+    else:
+        try:
+            invest_amount = float(amount)
+        except ValueError:
+            await interaction.response.send_message("Invalid investment amount.", ephemeral=True)
+            return
+
+    if invest_amount <= 0:
+        await interaction.response.send_message("Investment amount must be greater than 0.", ephemeral=True)
+        return
+    if invest_amount > current_balance:
+        await interaction.response.send_message(f"You do not have enough Beaned Bucks to invest {invest_amount}.", ephemeral=True)
         return
 
-    user_record["balance"] = current_balance - amount
+    shares = invest_amount / price
+    user_record["balance"] = current_balance - invest_amount
     portfolio = user_record.get("portfolio", {})
     portfolio[stock] = portfolio.get(stock, 0) + shares
     user_record["portfolio"] = portfolio
-
-    #update total spent
-    user_record["total_spent"] = user_record.get("total_spent", 0) + amount
+    user_record["total_spent"] = user_record.get("total_spent", 0) + invest_amount
 
     data[user_id] = user_record
     save_data(data)
 
     await interaction.response.send_message(
-        f"Successfully invested {amount} Beaned Bucks in {stock} at {price} per share.\n"
+        f"Successfully invested {invest_amount} Beaned Bucks in {stock} at {price} per share.\n"
         f"You now own {portfolio[stock]} shares of {stock}.\n"
         f"Your new balance is {user_record['balance']} Beaned Bucks."
     )
+
 
 @bot.tree.command(
     name="portfolio",
@@ -628,14 +631,22 @@ def is_blackjack(hand):
     guild=discord.Object(id=GUILD_ID)
 )
 @app_commands.describe(bet="The amount of Beaned Bucks you want to bet (can be non-integer)")
-async def blackjack(interaction: discord.Interaction, bet: float):
+async def blackjack(interaction: discord.Interaction, bet: str):
     print(f"[Blackjack] Invoked by {interaction.user} with bet {bet}")
     data = load_data()
     user_id = str(interaction.user.id)
     user_record = data.get(user_id, {"balance": 0})
     balance = float(user_record.get("balance", 0))
-    print(f"[Blackjack] User record before game: {user_record}")
-    
+
+    if bet.lower() == "all":
+        bet = balance
+    else:
+        try:
+            bet = float(bet)
+        except ValueError:
+            await interaction.response.send_message("Invalid bet amount.", ephemeral=True)
+            return
+        
     if bet <= 0:
         await interaction.response.send_message("Bet must be greater than 0.", ephemeral=True)
         return
@@ -816,10 +827,12 @@ async def dailyboost(interaction: discord.Interaction):
         last_boost = datetime.datetime.fromisoformat(last_boost_str)
         if now - last_boost < datetime.timedelta(days=1):
             remaining = datetime.timedelta(days=1) - (now - last_boost)
-            minutes = remaining.seconds // 60
-            seconds = remaining.seconds % 60
+            # Calculate the remaining hours, minutes, and seconds
+            remaining_hours = remaining.seconds // 3600  # Get the number of whole hours
+            remaining_minutes = (remaining.seconds % 3600) // 60  # Get the remaining minutes after hours are accounted for
+            remaining_seconds = remaining.seconds % 60  # Get the remaining seconds after minutes are accounted for
             await interaction.response.send_message(
-                f"You have already claimed your daily booster reward. Try again in {minutes} minutes and {seconds} seconds.",
+                f"You have already claimed your daily booster reward. Try again in {remaining_hours} hours, {remaining_minutes} minutes and {remaining_seconds} seconds.",
                 ephemeral=True
             )
             return
@@ -1029,16 +1042,24 @@ async def leavenotification(interaction: discord.Interaction):
     bet="The amount of Beaned Bucks to bet",
     choice="Your bet: a number (0-36) or one of: odd, even, red, black, 1st12, 2nd12, 3rd12"
 )
-async def roulette(interaction: discord.Interaction, bet: float, choice: str):
+async def roulette(interaction: discord.Interaction, bet: str, choice: str):
     #validate bet amount.
-    if bet <= 0:
-        await interaction.response.send_message("Bet must be greater than 0.", ephemeral=True)
-        return
-
     data = load_data()
     user_id = str(interaction.user.id)
     user_record = data.get(user_id, {"balance": 0})
-    current_balance = user_record.get("balance", 0)
+    current_balance = float(user_record.get("balance", 0))
+    if bet.lower() == "all":
+        bet = current_balance
+    else:
+        try:
+            bet = float(bet)
+        except ValueError:
+            await interaction.response.send_message("Invalid bet amount.", ephemeral=True)
+            return
+        
+    if bet <= 0:
+        await interaction.response.send_message("Bet must be greater than 0.", ephemeral=True)
+        return
     if bet > current_balance:
         await interaction.response.send_message("You do not have enough Beaned Bucks for that bet.", ephemeral=True)
         return
