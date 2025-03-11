@@ -739,11 +739,11 @@ async def wheel(interaction: discord.Interaction, target: discord.Member):
     user_id = str(invoker.id)
     user_balance = data.get(user_id, {}).get("balance", 0)
     if not has_allowed_role:
-        if user_balance < 10000:
+        if user_balance < 50000:
             await interaction.response.send_message("You do not have permission to use this command. You must either have one of the allowed roles or at least 10,000 Beaned Bucks.", ephemeral=True)
             return
         else:
-            data[user_id]["balance"] = user_balance - 10000
+            data[user_id]["balance"] = user_balance - 50000
             save_data(data)
     options = [
         (60, "60 seconds"),
