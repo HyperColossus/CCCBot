@@ -330,7 +330,7 @@ def render_game_state(game, final=False):
 
 # --- Game State Class ---
 class BlackjackGame:
-    def __init__(self, player: discord.Member, bet: int):
+    def __init__(self, player: discord.Member, bet: float):
         self.player = player
         self.bet = bet
         self.deck = get_deck()
