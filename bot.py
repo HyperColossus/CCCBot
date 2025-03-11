@@ -111,7 +111,7 @@ def choose_new_market_event():
                 return None
             else:
                 #for chosen events, set a random duration
-                duration = random.randint(1, 4)
+                duration = random.randint(1, 3)
                 return {"event": event, "duration": duration}
     return None
 
@@ -129,19 +129,19 @@ def update_stock_prices():
             print(f"[Market Event] New event started: {current_market_event}")
         else:
             print("[Market Event] No event this update.")
-            
+
     event_type = current_market_event["event"] if current_market_event else None
 
     for stock, price in data.items():
         old_price = price
 
         if event_type == "rally":
-            #increase all stocks by 10-30%.
-            change_percent = random.uniform(0.10, 0.30)
+            #increase all stocks by 10-20%.
+            change_percent = random.uniform(0.10, 0.20)
             new_price = price * (1 + change_percent)
         elif event_type == "crash":
-            #decrease all stocks by 10-30%
-            change_percent = random.uniform(0.10, 0.30)
+            #decrease all stocks by 10-20%
+            change_percent = random.uniform(0.10, 0.20)
             new_price = price * (1 - change_percent)
         else:
             #normal update.
