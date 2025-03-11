@@ -11,3 +11,7 @@ Features these commands so far,
         /wheel [target] - Timeout a user randomly for various durations if you have enough Beaned Bucks or an allowed role.
         /joinnotification - Join the notif notifications channel.
         /leavenotification - Leave the notif notifications channel.
+        /portfolio - Views your stocks and their value
+        /buystock [stock] [price] - Buys an amount of stock equal to your value.
+        /sellstocks [stock] [amount] - Sells an amount of stock equal to your value.
+        /stock [name] - Views the entire stock market, if a name is included view the history of that stock.

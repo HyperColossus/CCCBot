@@ -1,6 +1,6 @@
 import discord
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 import json
 import os
 import random
@@ -25,6 +25,9 @@ GUILD_ID = 569672255508840449  # Your guild/server ID
 TARGET_USER_ID = 398607026176917535
 DATA_FILE = "data.json"
 ALLOWED_ROLES = ["him", "super admin"]
+STOCK_FILE = "stocks.json"
+STOCK_HISTORY_FILE = "stock_history.json"
+UPDATE_INTERVAL_MINUTES = 20 #changes stock interval
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -35,6 +38,224 @@ SPADES   = chr(9824)  # ♠
 CLUBS    = chr(9827)  # ♣
 BACKSIDE = "backside"
 
+def load_stocks():
+    try:
+        with open(STOCK_FILE, "r") as f:
+            data = json.load(f)
+            if not isinstance(data, dict):
+                raise ValueError("Stocks data is not a dictionary.")
+            return data
+    except (FileNotFoundError, json.JSONDecodeError, ValueError):
+        # Use default stock data if file not found or invalid.
+        default_data = {
+            "INK": 300.0,
+            "BEANEDCOIN": 10.0
+        }
+        save_stocks(default_data)
+        return default_data
+    
+def save_stocks(data):
+    with open(STOCK_FILE, "w") as f:
+        json.dump(data, f, indent=4)
+
+def load_stock_history():
+    try:
+        with open(STOCK_HISTORY_FILE, "r") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+def save_stock_history(history):
+    with open(STOCK_HISTORY_FILE, "w") as f:
+        json.dump(history, f, indent=4)
+
+def update_stock_prices():
+    data = load_stocks()         # Loads a dictionary: { "TWINKS": 300.0, ... }
+    history = load_stock_history()  # Loads the history (a dictionary mapping stock -> list of updates)
+    now_iso = datetime.datetime.now().isoformat()
+    changes = {}
+    for stock, price in data.items():
+        old_price = price
+        if random.random() < 0.01:  # 1% chance for a big jump (50-95% change)
+            jump_factor = random.uniform(0.5, 0.95)
+            if random.random() < 0.5:
+                new_price = price * (1 + jump_factor)
+            else:
+                new_price = price * (1 - jump_factor)
+            print(f"[Stock Market] {stock} BIG jump: {old_price} -> {new_price}")
+        else:
+            # Regular update: Change price by a random percentage between 0.5% and 5%.
+            change_percent = random.uniform(0.005, 0.05)
+            if random.random() < 0.5:
+                change_percent = -change_percent
+            new_price = price * (1 + change_percent)
+        new_price = max(round(new_price, 2), 0.01)
+        data[stock] = new_price
+
+        # Compute absolute and percentage change.
+        absolute_change = round(new_price - old_price, 2)
+        percent_change = round(((new_price - old_price) / old_price) * 100, 2) if old_price != 0 else 0
+        changes[stock] = {"old": old_price, "new": new_price, "abs": absolute_change, "perc": percent_change}
+
+        # Append the new price to history.
+        if stock not in history:
+            history[stock] = []
+        history[stock].append({"timestamp": now_iso, "price": new_price})
+    
+    save_stocks(data)
+    save_stock_history(history)
+    print("Stock prices updated:", data)
+    return changes
+
+
+@bot.tree.command(
+    name="buystock",
+    description="Invest a specified amount of Beaned Bucks to buy shares (fractional shares allowed).",
+    guild=discord.Object(id=GUILD_ID)
+)
+@app_commands.describe(
+    stock="The stock symbol to buy (e.g. ACME)",
+    amount="The amount of Beaned Bucks you want to invest"
+)
+async def buy(interaction: discord.Interaction, stock: str, amount: float):
+    if amount <= 0:
+        await interaction.response.send_message("Investment amount must be greater than 0.", ephemeral=True)
+        return
+
+    # Load current stock data. (Stocks JSON is a simple dict.)
+    stocks_data = load_stocks()  
+    stock = stock.upper()
+    if stock not in stocks_data:
+        await interaction.response.send_message("Invalid stock symbol.", ephemeral=True)
+        return
+
+    price = stocks_data[stock]
+    # Calculate fractional shares; do not round.
+    shares = amount / price  
+
+    # Load the user's data.
+    data = load_data()
+    user_id = str(interaction.user.id)
+    user_record = data.get(user_id, {"balance": 0, "portfolio": {}})
+    current_balance = user_record.get("balance", 0)
+
+    if current_balance < amount:
+        await interaction.response.send_message(
+            f"You do not have enough Beaned Bucks to invest {amount}.", ephemeral=True
+        )
+        return
+
+    # Deduct the investment amount and update the portfolio.
+    user_record["balance"] = current_balance - amount
+    portfolio = user_record.get("portfolio", {})
+    portfolio[stock] = portfolio.get(stock, 0) + shares
+    user_record["portfolio"] = portfolio
+    data[user_id] = user_record
+    save_data(data)
+
+    # Display the full float value without rounding.
+    await interaction.response.send_message(
+        f"Successfully invested {amount} Beaned Bucks in {stock} at {price} per share.\n"
+        f"You now own {portfolio[stock]} shares of {stock}.\n"
+        f"Your new balance is {user_record['balance']} Beaned Bucks."
+    )
+@bot.tree.command(
+    name="portfolio",
+    description="View your stock holdings and their current value.",
+    guild=discord.Object(id=GUILD_ID)
+)
+@app_commands.describe(user="Optional: The user whose portfolio you want to see (defaults to yourself)")
+async def portfolio(interaction: discord.Interaction, user: Optional[discord.Member] = None):
+    target = user or interaction.user
+    data = load_data()
+    user_id = str(target.id)
+    user_record = data.get(user_id, {"balance": 0, "portfolio": {}})
+    portfolio_holdings = user_record.get("portfolio", {})
+
+    # Load current stock prices (your stocks.json is a simple dict mapping stock symbols to prices).
+    stock_prices = load_stocks()
+
+    # Create the embed.
+    embed = discord.Embed(
+        title=f"{target.display_name}'s Portfolio",
+        color=discord.Color.green()
+    )
+    embed.set_footer(text=f"Balance: {user_record.get('balance', 0)} Beaned Bucks")
+    
+    if not portfolio_holdings:
+        embed.description = "No stock holdings found."
+    else:
+        total_value = 0.0
+        for symbol, shares in portfolio_holdings.items():
+            price = stock_prices.get(symbol, 0)
+            value = price * shares
+            total_value += value
+            embed.add_field(
+                name=symbol,
+                value=f"Shares: {shares}\nPrice: {price} Beaned Bucks\nValue: {round(value, 2)} Beaned Bucks",
+                inline=True
+            )
+        embed.add_field(
+            name="Total Portfolio Value",
+            value=f"{round(total_value, 2)} Beaned Bucks",
+            inline=False
+        )
+    await interaction.response.send_message(embed=embed)
+
+
+@bot.tree.command(
+    name="sellstock",
+    description="Sell shares of a stock to receive Beaned Bucks.",
+    guild=discord.Object(id=GUILD_ID)
+)
+@app_commands.describe(
+    stock="The stock symbol you want to sell (e.g. ACME)",
+    quantity="The number of shares you want to sell"
+)
+async def sell(interaction: discord.Interaction, stock: str, quantity: float):
+    # Validate that the quantity is positive.
+    if quantity <= 0:
+        await interaction.response.send_message("Quantity must be greater than zero.", ephemeral=True)
+        return
+
+    # Load current stock data.
+    stocks_data = load_stocks()
+    stock = stock.upper()
+    if stock not in stocks_data:
+        await interaction.response.send_message("Invalid stock symbol.", ephemeral=True)
+        return
+
+    price = stocks_data[stock]
+    sale_value = round(price * quantity, 2)
+
+    # Load the user's data.
+    data = load_data()
+    user_id = str(interaction.user.id)
+    user_record = data.get(user_id, {"balance": 0, "portfolio": {}})
+    portfolio = user_record.get("portfolio", {})
+
+    # Check if the user owns enough shares (fractional).
+    if stock not in portfolio or portfolio[stock] < quantity:
+        await interaction.response.send_message("You do not own enough shares of that stock to sell.", ephemeral=True)
+        return
+
+    # Deduct the sold shares from the portfolio.
+    portfolio[stock] -= quantity
+    if portfolio[stock] <= 0:
+        del portfolio[stock]
+    user_record["portfolio"] = portfolio
+
+    # Add the sale proceeds to the user's balance.
+    user_record["balance"] += sale_value
+
+    # Save updated data.
+    data[user_id] = user_record
+    save_data(data)
+
+    await interaction.response.send_message(
+        f"Successfully sold {quantity:.2f} shares of {stock} at {price} Beaned Bucks each for a total of {sale_value} Beaned Bucks.\n"
+        f"Your new balance is {user_record['balance']} Beaned Bucks."
+    )
 
 def load_data():
     if not os.path.exists(DATA_FILE):
@@ -222,6 +443,88 @@ class BlackjackView(discord.ui.View):
         # Deal one card and automatically end the player's turn.
         self.game.player_hand.append(self.game.deck.pop())
         await self.end_game(interaction)
+# Background task that updates the stock market periodically.
+
+@tasks.loop(minutes=UPDATE_INTERVAL_MINUTES)
+async def stock_market_loop():
+    update_stock_prices()
+
+@stock_market_loop.before_loop
+async def before_stock_loop():
+    await bot.wait_until_ready()
+
+@tasks.loop(minutes=UPDATE_INTERVAL_MINUTES)
+async def stock_market_loop():
+    changes = update_stock_prices()
+    
+    # Create an embed for the stock update.
+    embed = discord.Embed(
+        title="Stock Market Update",
+        color=discord.Color.blue(),
+        timestamp=datetime.datetime.utcnow()
+    )
+    embed.set_footer(text="Prices update every 20 minute")
+    
+    # Add a field for each stock.
+    for stock, change in changes.items():
+        sign = "+" if change["abs"] >= 0 else ""
+        field_value = (
+            f"**Old:** {change['old']}\n"
+            f"**New:** {change['new']}\n"
+            f"**Change:** {sign}{change['abs']} ({sign}{change['perc']}%)"
+        )
+        embed.add_field(name=stock, value=field_value, inline=True)
+    
+    # Find the channel named "stocks" and send the embed.
+    channel = discord.utils.get(bot.get_all_channels(), name="stocks")
+    if channel is not None:
+        try:
+            await channel.send(embed=embed)
+        except Exception as e:
+            print(f"Failed to send embed: {e}")
+    else:
+        print("Channel '#stocks' not found.")
+
+
+
+@bot.tree.command(
+    name="stocks",
+    description="View current stock prices, or view a specific stock's price history.",
+    guild=discord.Object(id=GUILD_ID)
+)
+@app_commands.describe(stock="Optional: The stock symbol to view history for")
+async def stocks(interaction: discord.Interaction, stock: Optional[str] = None):
+    current_prices = load_stocks()
+    
+    # If no specific stock is provided, display current prices for all stocks.
+    if stock is None:
+        msg = "**Current Stock Prices:**\n"
+        for sym, price in current_prices.items():
+            msg += f"**{sym}**: {price} Beaned Bucks\n"
+        await interaction.response.send_message(msg)
+    else:
+        stock = stock.upper()
+        # Check if the stock exists in current data.
+        if stock not in current_prices:
+            await interaction.response.send_message(f"Stock symbol '{stock}' not found.", ephemeral=True)
+            return
+
+        # Retrieve current price.
+        price = current_prices[stock]
+        msg = f"**{stock}**\nCurrent Price: {price} Beaned Bucks\n\n"
+        
+        # Load the stock history.
+        history = load_stock_history()
+        if stock in history and history[stock]:
+            msg += "**Price History (last 10 updates):**\n"
+            for record in history[stock][-10:]:
+                timestamp = record["timestamp"]
+                hist_price = record["price"]
+                msg += f"{timestamp}: {hist_price}\n"
+        else:
+            msg += "No history available."
+        
+        await interaction.response.send_message(msg)
 
 @bot.tree.command(
     name="help",
@@ -238,7 +541,11 @@ async def help_command(interaction: discord.Interaction):
         "**/balance [user]** - Check your Beaned Bucks balance. If no user is provided, it defaults to your own balance.\n\n"
         "**/wheel [target]** - Timeout a user randomly for various durations if you have enough Beaned Bucks or an allowed role.\n\n"
         "**/joinnotification** - Join the notif notifications channel.\n\n"
-        "**/leavenotification** - Leave the notif notifications channel."
+        "**/leavenotification** - Leave the notif notifications channel\n\n"
+        "**/portfolio** - Checks your stock portfolio\n\n"
+        "**/stock [stock name] - Checks the entire stock market, if stock name is included check that stocks history\n\n"
+        "**/buystock [stock] [price]** - Buys an amount of stock equal to your price.\n\n"
+        "**/sellstock [stock] [price]** - Sells an amount of stock equal to your price."
     )
     await interaction.response.send_message(help_text, ephemeral=True)
 
@@ -589,5 +896,5 @@ async def on_ready():
         print(f"Synced {len(synced)} command(s).")
     except Exception as e:
         print(f"Error syncing commands: {e}")
-
+    stock_market_loop.start()
 bot.run(TOKEN)
