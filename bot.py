@@ -796,7 +796,7 @@ async def dailyboost(interaction: discord.Interaction):
             )
             return
 
-    reward = random.randint(5000, 15000)
+    reward = random.randint(5000, 10000)
     user_record["balance"] += reward
     user_record["last_daily_boost"] = now.isoformat()
     data[user_id] = user_record
