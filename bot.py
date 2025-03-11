@@ -9,6 +9,7 @@ import asyncio
 from typing import Optional
 import datetime
 
+
 #keys are user IDs (as strings), values are dicts with session data. tracks active VCs
 active_vc_sessions = {}
 
@@ -26,7 +27,7 @@ TARGET_MEMBER_ID = int(config["target_member_id"])
 GUILD_ID = 569672255508840449  
 TARGET_USER_ID = 398607026176917535
 DATA_FILE = "data.json"
-ALLOWED_ROLES = ["him", "super admin"]
+ALLOWED_ROLES = ["him"]
 STOCK_FILE = "stocks.json"
 STOCK_HISTORY_FILE = "stock_history.json"
 UPDATE_INTERVAL_MINUTES = 20 #changes stock interval
