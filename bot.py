@@ -585,27 +585,44 @@ async def stocks(interaction: discord.Interaction, stock: Optional[str] = None):
     guild=discord.Object(id=GUILD_ID)
 )
 async def help_command(interaction: discord.Interaction):
-    help_text = (
-        "**Beaned Bot Help**\n\n"
-        "**/blackjack [bet]** - Play a round of Blackjack using your Beaned Bucks. Place a bet and then choose to Hit, Stand, or Double Down.\n\n"
-        "**/work** - Work to earn a random amount between 1 and 250 Beaned Bucks (usable every 10 minutes).\n\n"
-        "**/daily** - Claim your daily reward of 500-5000 Beaned bucks every 24 hours.\n\n"
-        "**/dailyboost** - Claim your daily reward of 5000-10000 Beaned bucks every 24 hours. (server boosters only).\n\n"
-        "**/balance [user]** - Check your Beaned Bucks balance. If no user is provided, it defaults to your own balance.\n\n"
-        "**/wheel [target]** - Timeout a user randomly for various durations if you have enough Beaned Bucks or an allowed role.\n\n"
-        "**/joinnotification** - Join the notif notifications channel.\n\n"
-        "**/leavenotification** - Leave the notif notifications channel\n\n"
-        "**/portfolio** - Checks your stock portfolio\n\n"
-        "**/stock [stock name]** - Checks the entire stock market, if stock name is included check that stocks history\n\n"
-        "**/buystock [stock] [price]** - Buys an amount of stock equal to your price.\n\n"
-        "**/sellstock [stock] [price]** - Sells an amount of stock equal to your price.\n\n"
-        "**/roulette [amount] [bet]** - Plays a game of roulette with your amount and bet.\n\n"
-        "**/leaderboard [type]** - Lets you view either the networth, time in vc, or time in vc alone leaderboard.\n\n"
-        "**/lotteryticket [numbers]** - Buys a lottery ticket using the numbers provided.\n\n"
-        "**/lotterydraw** - Forces a lottery draw, restricted to certain roles\n\n"
-        "**/lotterytotal** - Views the current lottery jackpot."
+    embed = discord.Embed(
+        title="Beaned Bot Help",
+        color=discord.Color.blue(),
+        description="Below are the commands available, grouped by category."
     )
-    await interaction.response.send_message(help_text, ephemeral=True)
+    
+    general = (
+        "**/balance [user]** - Check your Beaned Bucks balance (defaults to your own).\n"
+        "**/joinnotification** - Join the notif notifications channel.\n"
+        "**/leavenotification** - Leave the notif notifications channel."
+    )
+    
+    gambling = (
+        "**/blackjack [bet]** - Play a round of Blackjack using your Beaned Bucks.\n"
+        "**/roulette [amount] [bet]** - Play a game of roulette with your bet.\n"
+        "**/wheel [target]** - Timeout a user randomly if you have enough Beaned Bucks or the allowed role."
+    )
+    
+    stocks = (
+        "**/portfolio** - Check your stock portfolio and profit (invested vs. earned).\n"
+        "**/stock [stock name]** - View current stock prices or a specific stock's history.\n"
+        "**/buystock [stock] [price]** - Buy stock at your specified price.\n"
+        "**/sellstock [stock] [price]** - Sell stock at your specified price."
+    )
+    
+    lottery = (
+        "**/lotteryticket [numbers]** - Buy a lottery ticket for 5,000 Beaned Bucks; choose 5 unique numbers (1-60).\n"
+        "**/lotterydraw** - Force a lottery draw (restricted to lottery admins).\n"
+        "**/lotterytotal** - View the current lottery jackpot."
+    )
+    
+    embed.add_field(name="General", value=general, inline=False)
+    embed.add_field(name="Gambling", value=gambling, inline=False)
+    embed.add_field(name="Stocks", value=stocks, inline=False)
+    embed.add_field(name="Lottery", value=lottery, inline=False)
+    
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
 
 @bot.tree.command(
     name="work",
