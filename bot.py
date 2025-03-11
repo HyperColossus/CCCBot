@@ -600,15 +600,18 @@ async def work(interaction: discord.Interaction):
 def is_blackjack(hand):
     """Return True if hand is a blackjack (exactly 2 cards with value 21)."""
     return len(hand) == 2 and get_hand_value(hand) == 21
-
-@bot.tree.command(name="blackjack", description="Play a round of Blackjack using your Beaned Bucks.", guild=discord.Object(id=GUILD_ID))
-@app_commands.describe(bet="The amount of Beaned Bucks you want to bet")
-async def blackjack(interaction: discord.Interaction, bet: int):
+@bot.tree.command(
+    name="blackjack",
+    description="Play a round of Blackjack using your Beaned Bucks.",
+    guild=discord.Object(id=GUILD_ID)
+)
+@app_commands.describe(bet="The amount of Beaned Bucks you want to bet (can be non-integer)")
+async def blackjack(interaction: discord.Interaction, bet: float):
     print(f"[Blackjack] Invoked by {interaction.user} with bet {bet}")
     data = load_data()
     user_id = str(interaction.user.id)
     user_record = data.get(user_id, {"balance": 0})
-    balance = user_record.get("balance", 0)
+    balance = float(user_record.get("balance", 0))
     print(f"[Blackjack] User record before game: {user_record}")
     
     if bet <= 0:
@@ -618,21 +621,20 @@ async def blackjack(interaction: discord.Interaction, bet: int):
         await interaction.response.send_message("You don't have enough Beaned Bucks to make that bet.", ephemeral=True)
         return
 
-    #create a new blackjack game.
+    # Create a new blackjack game.
     game = BlackjackGame(interaction.user, bet)
-    #store starting balance and remaining funds.
+    # Store starting balance and remaining funds (as floats).
     game.start_balance = balance
     game.remaining = balance - bet
 
-    #check for blackjack immediately.
+    # Check for blackjack immediately (a two-card 21).
     if is_blackjack(game.player_hand):
-        #player has blackjack.
         if is_blackjack(game.dealer_hand):
             game.result = "tie"
         else:
             game.result = "win"
-            #apply 1.5x multiplier.
-            game.bet = int(game.bet * 1.5)
+            # Apply 1.5x multiplier for blackjack; keep it as a float.
+            game.bet = game.bet * 1.5
         content = render_game_state(game, final=True)
         if game.result == "win":
             outcome_text = f"Blackjack! You win {game.bet} Beaned Bucks!"
@@ -641,12 +643,12 @@ async def blackjack(interaction: discord.Interaction, bet: int):
         content += "\n\n" + outcome_text
         await interaction.response.send_message(content=content, ephemeral=False)
         
-        #update the balance.
+        # Update the balance.
         if game.result == "win":
             user_record["balance"] = balance + game.bet
             print(f"[Blackjack] User wins with blackjack. New balance should be {balance + game.bet}.")
         else:
-            user_record["balance"] = balance  #tie, no change
+            user_record["balance"] = balance  # tie, no change
             print(f"[Blackjack] Game tied with blackjack. Balance remains {balance}.")
         data[user_id] = user_record
         save_data(data)
@@ -656,14 +658,13 @@ async def blackjack(interaction: discord.Interaction, bet: int):
             print(f"[Blackjack] Error sending followup: {e}")
         return
 
-    #if no immediate blackjack, proceed with the interactive view.
+    # If no immediate blackjack, proceed with the interactive view.
     content = render_game_state(game)
     view = BlackjackView(game)
-    #making the game public; remove ephemeral if you want visibility.
     await interaction.response.send_message(content=content, view=view, ephemeral=False)
     await view.wait()
 
-    #update the player's balance using the updated game.bet.
+    # Update the player's balance using the updated game.bet (float arithmetic).
     if game.result == "win":
         user_record["balance"] = balance + game.bet
         print(f"[Blackjack] User wins. New balance should be {balance + game.bet}.")
