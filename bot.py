@@ -211,7 +211,6 @@ async def portfolio(interaction: discord.Interaction, user: Optional[discord.Mem
     embed.add_field(name="Net Profit", value=f"{net_profit} Beaned Bucks", inline=True)
     
     await interaction.response.send_message(embed=embed)
-
 @bot.tree.command(
     name="sell",
     description="Sell shares of a stock (fractional shares allowed) to receive Beaned Bucks.",
@@ -219,48 +218,70 @@ async def portfolio(interaction: discord.Interaction, user: Optional[discord.Mem
 )
 @app_commands.describe(
     stock="The stock symbol you want to sell (e.g. ACME)",
-    quantity="The number of shares you want to sell (can be fractional, e.g. 0.68)"
+    quantity="The number of shares you want to sell (can be fractional, e.g. 0.68, or type 'all' to sell everything)"
 )
-async def sell(interaction: discord.Interaction, stock: str, quantity: float):
-    if quantity <= 0:
-        await interaction.response.send_message("Quantity must be greater than zero.", ephemeral=True)
-        return
-
-    stocks_data = load_stocks()
+async def sell(interaction: discord.Interaction, stock: str, quantity: str):
     stock = stock.upper()
+
+    # Load current stock data.
+    stocks_data = load_stocks()
     if stock not in stocks_data:
         await interaction.response.send_message("Invalid stock symbol.", ephemeral=True)
         return
 
     price = stocks_data[stock]
-    sale_value = round(price * quantity, 2)
 
+    # Load user data.
     data = load_data()
     user_id = str(interaction.user.id)
     user_record = data.get(user_id, {"balance": 0, "portfolio": {}, "total_spent": 0, "total_earned": 0})
     portfolio = user_record.get("portfolio", {})
 
-    if stock not in portfolio or portfolio[stock] < quantity:
+    if stock not in portfolio:
+        await interaction.response.send_message("You do not own any shares of that stock.", ephemeral=True)
+        return
+
+    # Determine the quantity to sell.
+    try:
+        if quantity.lower() == "all":
+            sell_quantity = portfolio[stock]
+        else:
+            sell_quantity = float(quantity)
+    except Exception as e:
+        await interaction.response.send_message("Invalid quantity format. Please provide a number or 'all'.", ephemeral=True)
+        return
+
+    if sell_quantity <= 0:
+        await interaction.response.send_message("Quantity must be greater than zero.", ephemeral=True)
+        return
+
+    if portfolio[stock] < sell_quantity:
         await interaction.response.send_message("You do not own enough shares of that stock to sell.", ephemeral=True)
         return
 
-    portfolio[stock] -= quantity
+    sale_value = round(price * sell_quantity, 2)
+
+    # Update portfolio.
+    portfolio[stock] -= sell_quantity
     if portfolio[stock] <= 0:
         del portfolio[stock]
     user_record["portfolio"] = portfolio
 
+    # Update user's balance.
     user_record["balance"] += sale_value
 
-    #update totatl earned
+    # Update total earned.
     user_record["total_earned"] = user_record.get("total_earned", 0) + sale_value
 
     data[user_id] = user_record
     save_data(data)
 
     await interaction.response.send_message(
-        f"Successfully sold {quantity:.2f} shares of {stock} at {price} Beaned Bucks each for a total of {sale_value} Beaned Bucks.\n"
+        f"Successfully sold {sell_quantity} shares of {stock} at {price} Beaned Bucks each for a total of {sale_value} Beaned Bucks.\n"
         f"Your new balance is {user_record['balance']} Beaned Bucks."
     )
+
+
 
 def load_data():
     if not os.path.exists(DATA_FILE):
