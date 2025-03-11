@@ -565,25 +565,25 @@ async def work(interaction: discord.Interaction):
     data = load_data()
     user_id = str(interaction.user.id)
     now = datetime.datetime.now()
-    
-    #retrieve or initialize user record, with "last_work" timestamp.
-    user_record = data.get(user_id, {"balance": 0, "last_work": None})
+
+    # Retrieve or initialize user record with default keys.
+    user_record = data.get(user_id, {})
+    user_record.setdefault("balance", 0)
+    user_record.setdefault("last_work", None)
+
     last_work_str = user_record.get("last_work")
-    
-    #check if 10 minutes have passed since last work.
     if last_work_str:
         last_work = datetime.datetime.fromisoformat(last_work_str)
         if now - last_work < datetime.timedelta(minutes=10):
             remaining = datetime.timedelta(minutes=10) - (now - last_work)
-            remaining_minutes = remaining.seconds // 60
-            remaining_seconds = remaining.seconds % 60
+            minutes = remaining.seconds // 60
+            seconds = remaining.seconds % 60
             await interaction.response.send_message(
-                f"You can work again in {remaining_minutes} minutes and {remaining_seconds} seconds.",
+                f"You can work again in {minutes} minutes and {seconds} seconds.",
                 ephemeral=True
             )
             return
 
-    #award a random amount between 1 and 250 Beaned Bucks.
     reward = random.randint(1, 250)
     user_record["balance"] += reward
     user_record["last_work"] = now.isoformat()
@@ -591,9 +591,10 @@ async def work(interaction: discord.Interaction):
     save_data(data)
     
     await interaction.response.send_message(
-        f"You worked and earned {reward} Beaned Bucks! Your new balance is {user_record['balance']} Beaned Bucks.",
+        f"You worked and earned {reward} Beaned Bucks! Your new balance is {user_record['balance']}.",
         ephemeral=True
     )
+
 
 #in your blackjack command, after validating the bet:
 def is_blackjack(hand):
@@ -686,30 +687,47 @@ async def blackjack(interaction: discord.Interaction, bet: int):
 
 
 # --- Daily Slash Command ---
-@bot.tree.command(name="daily", description="Claim your daily reward of 500-1000 Beaned Bucks (once every 24 hours).", guild=discord.Object(id=GUILD_ID))
+@bot.tree.command(
+    name="daily",
+    description="Claim your daily reward of 500-1000 Beaned Bucks (once every 24 hours).",
+    guild=discord.Object(id=GUILD_ID)
+)
 async def daily(interaction: discord.Interaction):
     data = load_data()
     user_id = str(interaction.user.id)
     now = datetime.datetime.now()
-    user_record = data.get(user_id, {"balance": 0, "last_daily": None})
+    
+    #retrieve or initialize user record with a default balance of 0.
+    user_record = data.get(user_id, {})
+    user_record.setdefault("balance", 0)
+    user_record.setdefault("last_daily", None)
+    
+    #check if the user has already claimed within the last 24 hours.
     last_daily_str = user_record.get("last_daily")
     if last_daily_str:
         last_daily = datetime.datetime.fromisoformat(last_daily_str)
         if now - last_daily < datetime.timedelta(days=1):
             remaining = datetime.timedelta(days=1) - (now - last_daily)
-            remaining_hours = remaining.seconds // 3600
-            remaining_minutes = (remaining.seconds % 3600) // 60
+            remaining_minutes = remaining.seconds // 60
+            remaining_seconds = remaining.seconds % 60
             await interaction.response.send_message(
-                f"You have already claimed your daily reward. Try again in {remaining_hours} hours and {remaining_minutes} minutes.",
+                f"You have already claimed your daily reward. Try again in {remaining_minutes} minutes and {remaining_seconds} seconds.",
                 ephemeral=True
             )
             return
-    reward = random.randint(500, 5000)
+
+    #award a random amount between 500 and 1000 Beaned Bucks.
+    reward = random.randint(500, 1000)
     user_record["balance"] += reward
     user_record["last_daily"] = now.isoformat()
     data[user_id] = user_record
     save_data(data)
-    await interaction.response.send_message(f"You received {reward} Beaned Bucks! Your new balance is {user_record['balance']}.", ephemeral=True)
+    
+    await interaction.response.send_message(
+        f"You received {reward} Beaned Bucks! Your new balance is {user_record['balance']}.",
+        ephemeral=True
+    )
+
 
 # --- Wheel Slash Command ---
 @bot.tree.command(name="wheel", description="Timeout a user randomly with varying durations if you have at least 10,000 Beaned Bucks.", guild=discord.Object(id=GUILD_ID))
@@ -745,10 +763,9 @@ async def wheel(interaction: discord.Interaction, target: discord.Member):
         print(f"Error during timeout: {e}")
 
         await interaction.response.send_message("Failed to timeout the user. Check my permissions.", ephemeral=True)
-
 @bot.tree.command(
     name="dailyboost",
-    description="Claim your daily booster reward (5,000-10,000 Beaned Bucks) every 24 hours)",
+    description="Claim your daily booster reward (5,000-15,000 Beaned Bucks) if you are a Server Booster.",
     guild=discord.Object(id=GUILD_ID)
 )
 async def dailyboost(interaction: discord.Interaction):
@@ -760,25 +777,25 @@ async def dailyboost(interaction: discord.Interaction):
     data = load_data()
     user_id = str(interaction.user.id)
     now = datetime.datetime.now()
-    
-    #retrieve or initialize user record with a separate field for daily boost.
-    user_record = data.get(user_id, {"balance": 0, "last_daily_boost": None})
+
+    #retrieve or initialize user record with default keys.
+    user_record = data.get(user_id, {})
+    user_record.setdefault("balance", 0)
+    user_record.setdefault("last_daily_boost", None)
+
     last_boost_str = user_record.get("last_daily_boost")
-    
-    #check if the user has already claimed their boost reward within 24 hours.
     if last_boost_str:
         last_boost = datetime.datetime.fromisoformat(last_boost_str)
         if now - last_boost < datetime.timedelta(days=1):
             remaining = datetime.timedelta(days=1) - (now - last_boost)
-            remaining_hours = remaining.seconds // 3600
-            remaining_minutes = (remaining.seconds % 3600) // 60
+            minutes = remaining.seconds // 60
+            seconds = remaining.seconds % 60
             await interaction.response.send_message(
-                f"You have already claimed your daily booster reward. Try again in {remaining_hours} hours and {remaining_minutes} minutes.",
+                f"You have already claimed your daily booster reward. Try again in {minutes} minutes and {seconds} seconds.",
                 ephemeral=True
             )
             return
 
-    #award a random boost reward between 5,000 and 15,000 Beaned Bucks.
     reward = random.randint(5000, 15000)
     user_record["balance"] += reward
     user_record["last_daily_boost"] = now.isoformat()
@@ -789,6 +806,7 @@ async def dailyboost(interaction: discord.Interaction):
         f"You worked as a booster and earned {reward} Beaned Bucks! Your new balance is {user_record['balance']}.",
         ephemeral=True
     )
+
 
 @bot.tree.command(
     name="pay",
@@ -855,18 +873,18 @@ async def on_voice_state_update(member, before, after):
 
     # -- Voice Session Tracking for ALL Users --
 
-    # If a user joins a voice channel:
+    #if a user joins a voice channel:
     if before.channel is None and after.channel is not None:
         channel = after.channel
         members = non_bot_members(channel)
         alone = (len(members) == 1)
         active_vc_sessions[uid] = {
-            "join_time": now,                   # When they joined
-            "channel_id": channel.id,           # The channel they joined
-            "last_alone_update": now if alone else None,  # When they became alone (if applicable)
-            "alone_accumulated": datetime.timedelta(0)    # Total alone time accumulated so far
+            "join_time": now,                   #when they joined
+            "channel_id": channel.id,           #the channel they joined
+            "last_alone_update": now if alone else None,  #when they became alone
+            "alone_accumulated": datetime.timedelta(0)    #total alone time accumulated so far
         }
-    # If a user leaves a voice channel:
+    #if a user leaves a voice channel:
     elif before.channel is not None and after.channel is None:
         session = active_vc_sessions.pop(uid, None)
         if session:
@@ -880,9 +898,9 @@ async def on_voice_state_update(member, before, after):
             record["vc_timealone"] = record.get("vc_timealone", 0) + alone_time.total_seconds()
             data[uid] = record
             save_data(data)
-    # If a user switches voice channels:
+    #if a user switches voice channels
     elif before.channel is not None and after.channel is not None:
-        # End the old session.
+        #end the old session
         session = active_vc_sessions.pop(uid, None)
         if session:
             session_duration = now - session["join_time"]
@@ -895,7 +913,7 @@ async def on_voice_state_update(member, before, after):
             record["vc_timealone"] = record.get("vc_timealone", 0) + alone_time.total_seconds()
             data[uid] = record
             save_data(data)
-        # Start a new session in the new channel.
+        #start a new session in the new channel
         channel = after.channel
         members = non_bot_members(channel)
         alone = (len(members) == 1)
@@ -906,7 +924,7 @@ async def on_voice_state_update(member, before, after):
             "alone_accumulated": datetime.timedelta(0)
         }
 
-    # Additionally, update alone status for users in both the old and new channels.
+    #additionally update alone status for users in both the old and new channels
     for channel in [before.channel, after.channel]:
         if channel is None:
             continue
@@ -914,12 +932,12 @@ async def on_voice_state_update(member, before, after):
         for m in members:
             s = active_vc_sessions.get(str(m.id))
             if s and s["channel_id"] == channel.id:
-                # If only one member is in the channel, mark as alone.
+                #if only one member is in the channel, mark as alone.
                 if len(members) == 1:
                     if s["last_alone_update"] is None:
                         s["last_alone_update"] = now
                 else:
-                    # If more than one member and they were marked as alone, accumulate the alone time.
+                    #if more than one member and they were marked as alone, accumulate the alone time.
                     if s["last_alone_update"]:
                         delta = now - s["last_alone_update"]
                         s["alone_accumulated"] += delta
