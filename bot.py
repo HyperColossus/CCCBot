@@ -809,7 +809,7 @@ async def blackjack(interaction: discord.Interaction, bet: str):
 # --- Daily Slash Command ---
 @bot.tree.command(
     name="daily",
-    description="Claim your daily reward of 500-1000 Beaned Bucks (once every 24 hours).",
+    description="Claim your daily reward of 1000-3000 Beaned Bucks (once every 24 hours).",
     guild=discord.Object(id=GUILD_ID)
 )
 async def daily(interaction: discord.Interaction):
@@ -842,7 +842,7 @@ async def daily(interaction: discord.Interaction):
             return
 
     #award a random amount between 500 and 1000 Beaned Bucks.
-    reward = random.randint(500, 1000)
+    reward = random.randint(1000, 5000)
     user_record["balance"] += reward
     user_record["last_daily"] = now.isoformat()
     data[user_id] = user_record
