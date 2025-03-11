@@ -109,7 +109,7 @@ def update_stock_prices():
 
 
 @bot.tree.command(
-    name="buystock",
+    name="buy",
     description="Invest a specified amount of Beaned Bucks to buy shares (fractional shares allowed).",
     guild=discord.Object(id=GUILD_ID)
 )
@@ -122,7 +122,6 @@ async def buy(interaction: discord.Interaction, stock: str, amount: float):
         await interaction.response.send_message("Investment amount must be greater than 0.", ephemeral=True)
         return
 
-    # Load current stock data. (Stocks JSON is a simple dict.)
     stocks_data = load_stocks()  
     stock = stock.upper()
     if stock not in stocks_data:
@@ -130,13 +129,12 @@ async def buy(interaction: discord.Interaction, stock: str, amount: float):
         return
 
     price = stocks_data[stock]
-    # Calculate fractional shares; do not round.
     shares = amount / price  
 
-    # Load the user's data.
     data = load_data()
     user_id = str(interaction.user.id)
-    user_record = data.get(user_id, {"balance": 0, "portfolio": {}})
+    # Initialize portfolio and tracking fields if they don't exist.
+    user_record = data.get(user_id, {"balance": 0, "portfolio": {}, "total_spent": 0, "total_earned": 0})
     current_balance = user_record.get("balance", 0)
 
     if current_balance < amount:
@@ -145,23 +143,26 @@ async def buy(interaction: discord.Interaction, stock: str, amount: float):
         )
         return
 
-    # Deduct the investment amount and update the portfolio.
     user_record["balance"] = current_balance - amount
     portfolio = user_record.get("portfolio", {})
     portfolio[stock] = portfolio.get(stock, 0) + shares
     user_record["portfolio"] = portfolio
+
+    # **Update total spent:**
+    user_record["total_spent"] = user_record.get("total_spent", 0) + amount
+
     data[user_id] = user_record
     save_data(data)
 
-    # Display the full float value without rounding.
     await interaction.response.send_message(
         f"Successfully invested {amount} Beaned Bucks in {stock} at {price} per share.\n"
         f"You now own {portfolio[stock]} shares of {stock}.\n"
         f"Your new balance is {user_record['balance']} Beaned Bucks."
     )
+
 @bot.tree.command(
     name="portfolio",
-    description="View your stock holdings and their current value.",
+    description="View your stock holdings, and track your profit (spent vs earned).",
     guild=discord.Object(id=GUILD_ID)
 )
 @app_commands.describe(user="Optional: The user whose portfolio you want to see (defaults to yourself)")
@@ -169,13 +170,11 @@ async def portfolio(interaction: discord.Interaction, user: Optional[discord.Mem
     target = user or interaction.user
     data = load_data()
     user_id = str(target.id)
-    user_record = data.get(user_id, {"balance": 0, "portfolio": {}})
+    user_record = data.get(user_id, {"balance": 0, "portfolio": {}, "total_spent": 0, "total_earned": 0})
     portfolio_holdings = user_record.get("portfolio", {})
 
-    # Load current stock prices (your stocks.json is a simple dict mapping stock symbols to prices).
     stock_prices = load_stocks()
 
-    # Create the embed.
     embed = discord.Embed(
         title=f"{target.display_name}'s Portfolio",
         color=discord.Color.green()
@@ -196,29 +195,35 @@ async def portfolio(interaction: discord.Interaction, user: Optional[discord.Mem
                 inline=True
             )
         embed.add_field(
-            name="Total Portfolio Value",
+            name="Total Holdings Value",
             value=f"{round(total_value, 2)} Beaned Bucks",
             inline=False
         )
+    
+    # Add profit tracking information.
+    total_spent = user_record.get("total_spent", 0)
+    total_earned = user_record.get("total_earned", 0)
+    net_profit = total_earned - total_spent
+    embed.add_field(name="Total Invested", value=f"{total_spent} Beaned Bucks", inline=True)
+    embed.add_field(name="Total Earned", value=f"{total_earned} Beaned Bucks", inline=True)
+    embed.add_field(name="Net Profit", value=f"{net_profit} Beaned Bucks", inline=True)
+    
     await interaction.response.send_message(embed=embed)
 
-
 @bot.tree.command(
-    name="sellstock",
-    description="Sell shares of a stock to receive Beaned Bucks.",
+    name="sell",
+    description="Sell shares of a stock (fractional shares allowed) to receive Beaned Bucks.",
     guild=discord.Object(id=GUILD_ID)
 )
 @app_commands.describe(
     stock="The stock symbol you want to sell (e.g. ACME)",
-    quantity="The number of shares you want to sell"
+    quantity="The number of shares you want to sell (can be fractional, e.g. 0.68)"
 )
 async def sell(interaction: discord.Interaction, stock: str, quantity: float):
-    # Validate that the quantity is positive.
     if quantity <= 0:
         await interaction.response.send_message("Quantity must be greater than zero.", ephemeral=True)
         return
 
-    # Load current stock data.
     stocks_data = load_stocks()
     stock = stock.upper()
     if stock not in stocks_data:
@@ -228,27 +233,25 @@ async def sell(interaction: discord.Interaction, stock: str, quantity: float):
     price = stocks_data[stock]
     sale_value = round(price * quantity, 2)
 
-    # Load the user's data.
     data = load_data()
     user_id = str(interaction.user.id)
-    user_record = data.get(user_id, {"balance": 0, "portfolio": {}})
+    user_record = data.get(user_id, {"balance": 0, "portfolio": {}, "total_spent": 0, "total_earned": 0})
     portfolio = user_record.get("portfolio", {})
 
-    # Check if the user owns enough shares (fractional).
     if stock not in portfolio or portfolio[stock] < quantity:
         await interaction.response.send_message("You do not own enough shares of that stock to sell.", ephemeral=True)
         return
 
-    # Deduct the sold shares from the portfolio.
     portfolio[stock] -= quantity
     if portfolio[stock] <= 0:
         del portfolio[stock]
     user_record["portfolio"] = portfolio
 
-    # Add the sale proceeds to the user's balance.
     user_record["balance"] += sale_value
 
-    # Save updated data.
+    # **Update total earned:**
+    user_record["total_earned"] = user_record.get("total_earned", 0) + sale_value
+
     data[user_id] = user_record
     save_data(data)
 
