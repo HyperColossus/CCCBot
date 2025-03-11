@@ -9,7 +9,7 @@ import asyncio
 from typing import Optional
 
 
-# Set up intents (members and voice_states are required)
+#sset up intents
 intents = discord.Intents.default()
 intents.members = True
 intents.voice_states = True
@@ -19,9 +19,7 @@ with open("config.json", "r") as f:
 TOKEN = config["token"]
 GUILD_ID = int(config["guild_id"])
 TARGET_MEMBER_ID = int(config["target_member_id"])
-# Replace with your actual guild/server ID
-GUILD_ID = 569672255508840449  # Your guild/server ID
-# The specific user ID to watch for
+GUILD_ID = 569672255508840449  
 TARGET_USER_ID = 398607026176917535
 DATA_FILE = "data.json"
 ALLOWED_ROLES = ["him", "super admin"]
@@ -31,7 +29,7 @@ UPDATE_INTERVAL_MINUTES = 20 #changes stock interval
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Constants for cards:
+#constants for cards:
 HEARTS   = chr(9829)  # ♥
 DIAMONDS = chr(9830)  # ♦
 SPADES   = chr(9824)  # ♠
@@ -46,7 +44,6 @@ def load_stocks():
                 raise ValueError("Stocks data is not a dictionary.")
             return data
     except (FileNotFoundError, json.JSONDecodeError, ValueError):
-        # Use default stock data if file not found or invalid.
         default_data = {
             "INK": 300.0,
             "BEANEDCOIN": 10.0
@@ -70,13 +67,13 @@ def save_stock_history(history):
         json.dump(history, f, indent=4)
 
 def update_stock_prices():
-    data = load_stocks()         # Loads a dictionary: { "TWINKS": 300.0, ... }
-    history = load_stock_history()  # Loads the history (a dictionary mapping stock -> list of updates)
+    data = load_stocks()         
+    history = load_stock_history()  
     now_iso = datetime.datetime.now().isoformat()
     changes = {}
     for stock, price in data.items():
         old_price = price
-        if random.random() < 0.01:  # 1% chance for a big jump (50-95% change)
+        if random.random() < 0.01:  #1% chance of giant jump
             jump_factor = random.uniform(0.5, 0.95)
             if random.random() < 0.5:
                 new_price = price * (1 + jump_factor)
@@ -84,7 +81,7 @@ def update_stock_prices():
                 new_price = price * (1 - jump_factor)
             print(f"[Stock Market] {stock} BIG jump: {old_price} -> {new_price}")
         else:
-            # Regular update: Change price by a random percentage between 0.5% and 5%.
+            #regular jumps
             change_percent = random.uniform(0.005, 0.05)
             if random.random() < 0.5:
                 change_percent = -change_percent
@@ -92,12 +89,12 @@ def update_stock_prices():
         new_price = max(round(new_price, 2), 0.01)
         data[stock] = new_price
 
-        # Compute absolute and percentage change.
+        #compute absolute and percentage change.
         absolute_change = round(new_price - old_price, 2)
         percent_change = round(((new_price - old_price) / old_price) * 100, 2) if old_price != 0 else 0
         changes[stock] = {"old": old_price, "new": new_price, "abs": absolute_change, "perc": percent_change}
 
-        # Append the new price to history.
+        #append the new price to history.
         if stock not in history:
             history[stock] = []
         history[stock].append({"timestamp": now_iso, "price": new_price})
@@ -133,7 +130,7 @@ async def buy(interaction: discord.Interaction, stock: str, amount: float):
 
     data = load_data()
     user_id = str(interaction.user.id)
-    # Initialize portfolio and tracking fields if they don't exist.
+    #initialize portfolio and tracking fields if they don't exist.
     user_record = data.get(user_id, {"balance": 0, "portfolio": {}, "total_spent": 0, "total_earned": 0})
     current_balance = user_record.get("balance", 0)
 
@@ -148,7 +145,7 @@ async def buy(interaction: discord.Interaction, stock: str, amount: float):
     portfolio[stock] = portfolio.get(stock, 0) + shares
     user_record["portfolio"] = portfolio
 
-    # **Update total spent:**
+    #update total spent
     user_record["total_spent"] = user_record.get("total_spent", 0) + amount
 
     data[user_id] = user_record
@@ -200,7 +197,7 @@ async def portfolio(interaction: discord.Interaction, user: Optional[discord.Mem
             inline=False
         )
     
-    # Add profit tracking information.
+    #add profit tracking
     total_spent = user_record.get("total_spent", 0)
     total_earned = user_record.get("total_earned", 0)
     net_profit = total_earned - total_spent
@@ -249,7 +246,7 @@ async def sell(interaction: discord.Interaction, stock: str, quantity: float):
 
     user_record["balance"] += sale_value
 
-    # **Update total earned:**
+    #update totatl earned
     user_record["total_earned"] = user_record.get("total_earned", 0) + sale_value
 
     data[user_id] = user_record
@@ -295,7 +292,7 @@ def get_hand_value(cards):
             value += 10
         else:
             value += int(rank)
-    # Count aces as 1, then add 10 if it won't bust
+    #count aces as 1, then add 10 if it won't bust
     value += number_of_aces
     for _ in range(number_of_aces):
         if value + 10 <= 21:
@@ -315,7 +312,7 @@ def render_game_state(game, final=False):
     if final:
         dealer_display = hand_to_str(game.dealer_hand)
     else:
-        # Hide the dealer's first card
+        #hide the dealer's first card
         dealer_display = "??"
         if len(game.dealer_hand) > 1:
             dealer_display += ", " + ", ".join(card_to_str(card) for card in game.dealer_hand[1:])
@@ -348,7 +345,7 @@ class BlackjackView(discord.ui.View):
             return
         self.game.finished = True
 
-        # Dealer's turn: hit until the dealer's hand value is at least 17.
+        #dealer's turn hit until the dealer's hand value is at least 17.
         while get_hand_value(self.game.dealer_hand) < 17:
             self.game.dealer_hand.append(self.game.deck.pop())
             await asyncio.sleep(1)
@@ -425,13 +422,13 @@ class BlackjackView(discord.ui.View):
         if self.game.finished:
             await interaction.response.defer()
             return
-        # Doubling is allowed only if the player has exactly two cards.
+        #doubling is allowed only if the player has exactly two cards.
         if len(self.game.player_hand) != 2:
             await interaction.response.send_message("You can only double down on your first move (with exactly 2 cards).", ephemeral=True)
             return
 
-        # Check if the player has enough funds to double down.
-        # The additional cost is equal to the current bet.
+        #check if the player has enough funds to double down.
+        #the additional cost is equal to the current bet.
         if not hasattr(self.game, 'remaining'):
             await interaction.response.send_message("Funds information missing.", ephemeral=True)
             return
@@ -439,15 +436,15 @@ class BlackjackView(discord.ui.View):
             await interaction.response.send_message("You don't have enough funds to double down.", ephemeral=True)
             return
 
-        # Deduct additional funds and double the bet.
+        #deduct additional funds and double the bet.
         self.game.remaining -= self.game.bet
         self.game.bet *= 2
         print(f"[Blackjack] Doubling down. New bet: {self.game.bet}. Remaining funds: {self.game.remaining}")
-        # Deal one card and automatically end the player's turn.
+        #deal one card and automatically end the player's turn.
         self.game.player_hand.append(self.game.deck.pop())
         await self.end_game(interaction)
-# Background task that updates the stock market periodically.
 
+#background task that updates the stock market periodically.
 @tasks.loop(minutes=UPDATE_INTERVAL_MINUTES)
 async def stock_market_loop():
     update_stock_prices()
@@ -460,7 +457,7 @@ async def before_stock_loop():
 async def stock_market_loop():
     changes = update_stock_prices()
     
-    # Create an embed for the stock update.
+    #create an embed for the stock update.
     embed = discord.Embed(
         title="Stock Market Update",
         color=discord.Color.blue(),
@@ -468,7 +465,7 @@ async def stock_market_loop():
     )
     embed.set_footer(text="Prices update every 20 minute")
     
-    # Add a field for each stock.
+    #add a field for each stock.
     for stock, change in changes.items():
         sign = "+" if change["abs"] >= 0 else ""
         field_value = (
@@ -478,7 +475,7 @@ async def stock_market_loop():
         )
         embed.add_field(name=stock, value=field_value, inline=True)
     
-    # Find the channel named "stocks" and send the embed.
+    #find the channel named "stocks" and send the embed.
     channel = discord.utils.get(bot.get_all_channels(), name="stocks")
     if channel is not None:
         try:
@@ -499,7 +496,7 @@ async def stock_market_loop():
 async def stocks(interaction: discord.Interaction, stock: Optional[str] = None):
     current_prices = load_stocks()
     
-    # If no specific stock is provided, display current prices for all stocks.
+    #if no specific stock is provided, display current prices for all stocks.
     if stock is None:
         msg = "**Current Stock Prices:**\n"
         for sym, price in current_prices.items():
@@ -507,16 +504,16 @@ async def stocks(interaction: discord.Interaction, stock: Optional[str] = None):
         await interaction.response.send_message(msg)
     else:
         stock = stock.upper()
-        # Check if the stock exists in current data.
+        #check if the stock exists in current data.
         if stock not in current_prices:
             await interaction.response.send_message(f"Stock symbol '{stock}' not found.", ephemeral=True)
             return
 
-        # Retrieve current price.
+        #retrieve current price.
         price = current_prices[stock]
         msg = f"**{stock}**\nCurrent Price: {price} Beaned Bucks\n\n"
         
-        # Load the stock history.
+        #load the stock history.
         history = load_stock_history()
         if stock in history and history[stock]:
             msg += "**Price History (last 10 updates):**\n"
@@ -563,11 +560,11 @@ async def work(interaction: discord.Interaction):
     user_id = str(interaction.user.id)
     now = datetime.datetime.now()
     
-    # Retrieve or initialize user record, with "last_work" timestamp.
+    #retrieve or initialize user record, with "last_work" timestamp.
     user_record = data.get(user_id, {"balance": 0, "last_work": None})
     last_work_str = user_record.get("last_work")
     
-    # Check if 10 minutes have passed since last work.
+    #check if 10 minutes have passed since last work.
     if last_work_str:
         last_work = datetime.datetime.fromisoformat(last_work_str)
         if now - last_work < datetime.timedelta(minutes=10):
@@ -580,7 +577,7 @@ async def work(interaction: discord.Interaction):
             )
             return
 
-    # Award a random amount between 1 and 250 Beaned Bucks.
+    #award a random amount between 1 and 250 Beaned Bucks.
     reward = random.randint(1, 250)
     user_record["balance"] += reward
     user_record["last_work"] = now.isoformat()
@@ -592,7 +589,7 @@ async def work(interaction: discord.Interaction):
         ephemeral=True
     )
 
-# In your blackjack command, after validating the bet:
+#in your blackjack command, after validating the bet:
 def is_blackjack(hand):
     """Return True if hand is a blackjack (exactly 2 cards with value 21)."""
     return len(hand) == 2 and get_hand_value(hand) == 21
@@ -614,20 +611,20 @@ async def blackjack(interaction: discord.Interaction, bet: int):
         await interaction.response.send_message("You don't have enough Beaned Bucks to make that bet.", ephemeral=True)
         return
 
-    # Create a new blackjack game.
+    #create a new blackjack game.
     game = BlackjackGame(interaction.user, bet)
-    # Store starting balance and remaining funds.
+    #store starting balance and remaining funds.
     game.start_balance = balance
     game.remaining = balance - bet
 
-    # Check for blackjack immediately.
+    #check for blackjack immediately.
     if is_blackjack(game.player_hand):
-        # Player has blackjack.
+        #player has blackjack.
         if is_blackjack(game.dealer_hand):
             game.result = "tie"
         else:
             game.result = "win"
-            # Apply 1.5x multiplier.
+            #apply 1.5x multiplier.
             game.bet = int(game.bet * 1.5)
         content = render_game_state(game, final=True)
         if game.result == "win":
@@ -637,12 +634,12 @@ async def blackjack(interaction: discord.Interaction, bet: int):
         content += "\n\n" + outcome_text
         await interaction.response.send_message(content=content, ephemeral=False)
         
-        # Update the balance.
+        #update the balance.
         if game.result == "win":
             user_record["balance"] = balance + game.bet
             print(f"[Blackjack] User wins with blackjack. New balance should be {balance + game.bet}.")
         else:
-            user_record["balance"] = balance  # tie, no change
+            user_record["balance"] = balance  #tie, no change
             print(f"[Blackjack] Game tied with blackjack. Balance remains {balance}.")
         data[user_id] = user_record
         save_data(data)
@@ -652,14 +649,14 @@ async def blackjack(interaction: discord.Interaction, bet: int):
             print(f"[Blackjack] Error sending followup: {e}")
         return
 
-    # If no immediate blackjack, proceed with the interactive view.
+    #if no immediate blackjack, proceed with the interactive view.
     content = render_game_state(game)
     view = BlackjackView(game)
-    # Making the game public; remove ephemeral if you want visibility.
+    #making the game public; remove ephemeral if you want visibility.
     await interaction.response.send_message(content=content, view=view, ephemeral=False)
     await view.wait()
 
-    # Update the player's balance using the updated game.bet.
+    #update the player's balance using the updated game.bet.
     if game.result == "win":
         user_record["balance"] = balance + game.bet
         print(f"[Blackjack] User wins. New balance should be {balance + game.bet}.")
@@ -749,7 +746,7 @@ async def wheel(interaction: discord.Interaction, target: discord.Member):
     guild=discord.Object(id=GUILD_ID)
 )
 async def dailyboost(interaction: discord.Interaction):
-    # Check if the user is a server booster.
+    #check if the user is a server booster.
     if interaction.user.premium_since is None:
         await interaction.response.send_message("You must be a Server Booster to claim this reward.", ephemeral=True)
         return
@@ -758,11 +755,11 @@ async def dailyboost(interaction: discord.Interaction):
     user_id = str(interaction.user.id)
     now = datetime.datetime.now()
     
-    # Retrieve or initialize user record with a separate field for daily boost.
+    #retrieve or initialize user record with a separate field for daily boost.
     user_record = data.get(user_id, {"balance": 0, "last_daily_boost": None})
     last_boost_str = user_record.get("last_daily_boost")
     
-    # Check if the user has already claimed their boost reward within 24 hours.
+    #check if the user has already claimed their boost reward within 24 hours.
     if last_boost_str:
         last_boost = datetime.datetime.fromisoformat(last_boost_str)
         if now - last_boost < datetime.timedelta(days=1):
@@ -775,7 +772,7 @@ async def dailyboost(interaction: discord.Interaction):
             )
             return
 
-    # Award a random boost reward between 5,000 and 15,000 Beaned Bucks.
+    #award a random boost reward between 5,000 and 15,000 Beaned Bucks.
     reward = random.randint(5000, 15000)
     user_record["balance"] += reward
     user_record["last_daily_boost"] = now.isoformat()
@@ -798,13 +795,13 @@ async def pay(interaction: discord.Interaction, user: discord.Member, amount: in
     payee_id = str(user.id)
     data = load_data()
 
-    # Ensure both payer and payee have an entry in the data.
+    #ensure both payer and payee have an entry in the data.
     if payer_id not in data:
         data[payer_id] = {"balance": 0}
     if payee_id not in data:
         data[payee_id] = {"balance": 0}
 
-    # Check that the transfer amount is positive.
+    #check that the transfer amount is positive.
     if amount <= 0:
         await interaction.response.send_message("Transfer amount must be greater than 0.", ephemeral=True)
         return
@@ -814,7 +811,7 @@ async def pay(interaction: discord.Interaction, user: discord.Member, amount: in
         await interaction.response.send_message("You do not have enough Beaned Bucks to complete this transfer.", ephemeral=True)
         return
 
-    # Subtract from payer and add to payee.
+    #subtract from payer and add to payee.
     data[payer_id]["balance"] = payer_balance - amount
     payee_balance = data[payee_id].get("balance", 0)
     data[payee_id]["balance"] = payee_balance + amount
@@ -849,7 +846,7 @@ async def on_voice_state_update(member, before, after):
 )
 @app_commands.describe(user="The user to check balance for (defaults to yourself if not provided).")
 async def balance(interaction: discord.Interaction, user: Optional[discord.Member] = None):
-    # Default to the interaction user if no user is specified.
+    #default to the interaction user if no user is specified.
     target = user or interaction.user
 
     data = load_data()
@@ -901,7 +898,7 @@ async def leavenotification(interaction: discord.Interaction):
     choice="Your bet: a number (0-36) or one of: odd, even, red, black, 1st12, 2nd12, 3rd12"
 )
 async def roulette(interaction: discord.Interaction, bet: float, choice: str):
-    # Validate bet amount.
+    #validate bet amount.
     if bet <= 0:
         await interaction.response.send_message("Bet must be greater than 0.", ephemeral=True)
         return
@@ -914,24 +911,24 @@ async def roulette(interaction: discord.Interaction, bet: float, choice: str):
         await interaction.response.send_message("You do not have enough Beaned Bucks for that bet.", ephemeral=True)
         return
 
-    # Deduct the wager from the user's balance immediately.
+    #deduct the wager from the user's balance immediately.
     user_record["balance"] = current_balance - bet
     data[user_id] = user_record
     save_data(data)
 
-    # Simulate the roulette spin (0-36)
+    #simulate the roulette spin (0-36)
     outcome = random.randint(0, 36)
 
-    # Define red and black numbers (using typical European roulette colors)
+    #define red and black numbers (using typical European roulette colors)
     red_numbers = {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36}
     black_numbers = {2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35}
 
-    # Determine the payout multiplier.
-    multiplier = 0  # if remains 0, the bet loses
+    #determine the payout multiplier.
+    multiplier = 0  #if remains 0, the bet loses
     win = False
     choice_lower = choice.lower()
 
-    # If the choice is a digit (i.e. betting on a specific number):
+    #if the choice is a digit (i.e. betting on a specific number):
     if choice.isdigit():
         chosen_number = int(choice)
         if 0 <= chosen_number <= 36:
@@ -973,7 +970,7 @@ async def roulette(interaction: discord.Interaction, bet: float, choice: str):
         await interaction.response.send_message("Invalid bet choice. Please choose a number (0-36) or one of: odd, even, red, black, 1st12, 2nd12, 3rd12.", ephemeral=True)
         return
 
-    # Create an embed to display the result.
+    #create an embed to display the result.
     embed = discord.Embed(
         title="Roulette Result",
         color=discord.Color.purple(),
@@ -984,11 +981,11 @@ async def roulette(interaction: discord.Interaction, bet: float, choice: str):
     embed.add_field(name="Wager", value=str(bet), inline=True)
 
     if win:
-        # If winning, payout is wager returned plus winnings:
-        winnings = bet * multiplier  # profit
-        total_return = bet + winnings  # total returned
+        #if winning, payout is wager returned plus winnings:
+        winnings = bet * multiplier  #profit
+        total_return = bet + winnings  #total returned
         embed.add_field(name="Result", value=f"WIN! Multiplier: {multiplier}x\nWinnings: {winnings} Beaned Bucks\nTotal Return: {total_return}", inline=False)
-        # Add the winnings back to user's balance.
+        #add the winnings back to user's balance.
         user_record["balance"] += total_return
     else:
         embed.add_field(name="Result", value="LOSE!", inline=False)
