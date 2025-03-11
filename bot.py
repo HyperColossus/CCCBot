@@ -211,6 +211,7 @@ async def portfolio(interaction: discord.Interaction, user: Optional[discord.Mem
     embed.add_field(name="Net Profit", value=f"{net_profit} Beaned Bucks", inline=True)
     
     await interaction.response.send_message(embed=embed)
+
 @bot.tree.command(
     name="sell",
     description="Sell shares of a stock (fractional shares allowed) to receive Beaned Bucks.",
@@ -223,7 +224,7 @@ async def portfolio(interaction: discord.Interaction, user: Optional[discord.Mem
 async def sell(interaction: discord.Interaction, stock: str, quantity: str):
     stock = stock.upper()
 
-    # Load current stock data.
+    #load current stock data.
     stocks_data = load_stocks()
     if stock not in stocks_data:
         await interaction.response.send_message("Invalid stock symbol.", ephemeral=True)
@@ -231,7 +232,7 @@ async def sell(interaction: discord.Interaction, stock: str, quantity: str):
 
     price = stocks_data[stock]
 
-    # Load user data.
+    #load user data.
     data = load_data()
     user_id = str(interaction.user.id)
     user_record = data.get(user_id, {"balance": 0, "portfolio": {}, "total_spent": 0, "total_earned": 0})
@@ -241,7 +242,7 @@ async def sell(interaction: discord.Interaction, stock: str, quantity: str):
         await interaction.response.send_message("You do not own any shares of that stock.", ephemeral=True)
         return
 
-    # Determine the quantity to sell.
+    #determine the quantity to sell.
     try:
         if quantity.lower() == "all":
             sell_quantity = portfolio[stock]
@@ -261,16 +262,16 @@ async def sell(interaction: discord.Interaction, stock: str, quantity: str):
 
     sale_value = round(price * sell_quantity, 2)
 
-    # Update portfolio.
+    #update portfolio.
     portfolio[stock] -= sell_quantity
     if portfolio[stock] <= 0:
         del portfolio[stock]
     user_record["portfolio"] = portfolio
 
-    # Update user's balance.
+    #update user's balance.
     user_record["balance"] += sale_value
 
-    # Update total earned.
+    #update total earned.
     user_record["total_earned"] = user_record.get("total_earned", 0) + sale_value
 
     data[user_id] = user_record
