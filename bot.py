@@ -52,13 +52,13 @@ def update_active_vc_sessions_on_startup():
                 if not member.bot:
                     uid = str(member.id)
                     if uid not in active_vc_sessions:
-                        #dtermine if the member is alone in this channel.
                         non_bots = [m for m in channel.members if not m.bot]
                         active_vc_sessions[uid] = {
                             "join_time": now,
                             "channel_id": channel.id,
                             "last_alone_update": now if len(non_bots) == 1 else None,
-                            "alone_accumulated": datetime.timedelta(0)
+                            "alone_accumulated": datetime.timedelta(0),
+                            "afk": (channel.id == AFK_CHANNEL_ID)
                         }
                         print(f"Added {member.display_name} (ID: {uid}) to active VC sessions.")
 
@@ -799,11 +799,11 @@ async def wheel(interaction: discord.Interaction, target: discord.Member):
     user_id = str(invoker.id)
     user_balance = data.get(user_id, {}).get("balance", 0)
     if not has_allowed_role:
-        if user_balance < 50000:
+        if user_balance < 25000:
             await interaction.response.send_message("You do not have permission to use this command. You must either have one of the allowed roles or at least 10,000 Beaned Bucks.", ephemeral=True)
             return
         else:
-            data[user_id]["balance"] = user_balance - 50000
+            data[user_id]["balance"] = user_balance - 25000
             save_data(data)
     options = [
         (60, "60 seconds"),
