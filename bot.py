@@ -537,15 +537,16 @@ async def help_command(interaction: discord.Interaction):
         "**/blackjack [bet]** - Play a round of Blackjack using your Beaned Bucks. Place a bet and then choose to Hit, Stand, or Double Down.\n\n"
         "**/work** - Work to earn a random amount between 1 and 250 Beaned Bucks (usable every 10 minutes).\n\n"
         "**/daily** - Claim your daily reward of 500-5000 Beaned bucks every 24 hours.\n\n"
-       "**dailyboost** - Claim your daily reward of 5000-10000 Beaned bucks every 24 hours. (server boosters only).\n\n"
+        "**/dailyboost** - Claim your daily reward of 5000-10000 Beaned bucks every 24 hours. (server boosters only).\n\n"
         "**/balance [user]** - Check your Beaned Bucks balance. If no user is provided, it defaults to your own balance.\n\n"
         "**/wheel [target]** - Timeout a user randomly for various durations if you have enough Beaned Bucks or an allowed role.\n\n"
         "**/joinnotification** - Join the notif notifications channel.\n\n"
         "**/leavenotification** - Leave the notif notifications channel\n\n"
         "**/portfolio** - Checks your stock portfolio\n\n"
-        "**/stock [stock name] - Checks the entire stock market, if stock name is included check that stocks history\n\n"
+        "**/stock [stock name]** - Checks the entire stock market, if stock name is included check that stocks history\n\n"
         "**/buystock [stock] [price]** - Buys an amount of stock equal to your price.\n\n"
-        "**/sellstock [stock] [price]** - Sells an amount of stock equal to your price."
+        "**/sellstock [stock] [price]** - Sells an amount of stock equal to your price.\n\n"
+        "**/roulette [amount] [bet]** - Plays a game of roulette with your amount and bet."
     )
     await interaction.response.send_message(help_text, ephemeral=True)
 
@@ -887,6 +888,112 @@ async def leavenotification(interaction: discord.Interaction):
             await interaction.response.send_message("The 'notif' role has been removed.", ephemeral=True)
         except Exception:
             await interaction.response.send_message("Error removing the role.", ephemeral=True)
+@bot.tree.command(
+    name="roulette",
+    description="Play roulette. Bet on a number or category (odd, even, red, black, 1st12, 2nd12, 3rd12).",
+    guild=discord.Object(id=GUILD_ID)
+)
+@app_commands.describe(
+    bet="The amount of Beaned Bucks to bet",
+    choice="Your bet: a number (0-36) or one of: odd, even, red, black, 1st12, 2nd12, 3rd12"
+)
+async def roulette(interaction: discord.Interaction, bet: float, choice: str):
+    # Validate bet amount.
+    if bet <= 0:
+        await interaction.response.send_message("Bet must be greater than 0.", ephemeral=True)
+        return
+
+    data = load_data()
+    user_id = str(interaction.user.id)
+    user_record = data.get(user_id, {"balance": 0})
+    current_balance = user_record.get("balance", 0)
+    if bet > current_balance:
+        await interaction.response.send_message("You do not have enough Beaned Bucks for that bet.", ephemeral=True)
+        return
+
+    # Deduct the wager from the user's balance immediately.
+    user_record["balance"] = current_balance - bet
+    data[user_id] = user_record
+    save_data(data)
+
+    # Simulate the roulette spin (0-36)
+    outcome = random.randint(0, 36)
+
+    # Define red and black numbers (using typical European roulette colors)
+    red_numbers = {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36}
+    black_numbers = {2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35}
+
+    # Determine the payout multiplier.
+    multiplier = 0  # if remains 0, the bet loses
+    win = False
+    choice_lower = choice.lower()
+
+    # If the choice is a digit (i.e. betting on a specific number):
+    if choice.isdigit():
+        chosen_number = int(choice)
+        if 0 <= chosen_number <= 36:
+            if chosen_number == outcome:
+                multiplier = 35
+                win = True
+        else:
+            await interaction.response.send_message("Number must be between 0 and 36.", ephemeral=True)
+            return
+    elif choice_lower == "odd":
+        if outcome != 0 and outcome % 2 == 1:
+            multiplier = 1
+            win = True
+    elif choice_lower == "even":
+        if outcome != 0 and outcome % 2 == 0:
+            multiplier = 1
+            win = True
+    elif choice_lower == "red":
+        if outcome in red_numbers:
+            multiplier = 1
+            win = True
+    elif choice_lower == "black":
+        if outcome in black_numbers:
+            multiplier = 1
+            win = True
+    elif choice_lower in ["1st12", "first12"]:
+        if 1 <= outcome <= 12:
+            multiplier = 2
+            win = True
+    elif choice_lower in ["2nd12", "second12"]:
+        if 13 <= outcome <= 24:
+            multiplier = 2
+            win = True
+    elif choice_lower in ["3rd12", "third12"]:
+        if 25 <= outcome <= 36:
+            multiplier = 2
+            win = True
+    else:
+        await interaction.response.send_message("Invalid bet choice. Please choose a number (0-36) or one of: odd, even, red, black, 1st12, 2nd12, 3rd12.", ephemeral=True)
+        return
+
+    # Create an embed to display the result.
+    embed = discord.Embed(
+        title="Roulette Result",
+        color=discord.Color.purple(),
+        timestamp=datetime.datetime.utcnow()
+    )
+    embed.add_field(name="Outcome", value=str(outcome), inline=True)
+    embed.add_field(name="Your Bet", value=choice, inline=True)
+    embed.add_field(name="Wager", value=str(bet), inline=True)
+
+    if win:
+        # If winning, payout is wager returned plus winnings:
+        winnings = bet * multiplier  # profit
+        total_return = bet + winnings  # total returned
+        embed.add_field(name="Result", value=f"WIN! Multiplier: {multiplier}x\nWinnings: {winnings} Beaned Bucks\nTotal Return: {total_return}", inline=False)
+        # Add the winnings back to user's balance.
+        user_record["balance"] += total_return
+    else:
+        embed.add_field(name="Result", value="LOSE!", inline=False)
+    data[user_id] = user_record
+    save_data(data)
+
+    embed.set_footer(text=f"New Balance: {user_record['balance']} Beaned Bucks")
+    await interaction.response.send_message(embed=embed)
 
 @bot.event
 async def on_ready():
