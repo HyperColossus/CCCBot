@@ -139,8 +139,7 @@ class StocksCog(commands.Cog):
         if channel:
             embed = discord.Embed(
                 title="Stock Market Update",
-                color=discord.Color.blue(),
-                timestamp=datetime.datetime.utcnow()
+                color=discord.Color.blue()
             )
             embed.set_footer(text="Prices update every 20 minute")
             for stock, change in changes.items():
