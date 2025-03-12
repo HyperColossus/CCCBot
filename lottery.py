@@ -28,7 +28,7 @@ def load_lottery():
 def save_lottery(data):
     with open(LOTTERY_FILE, "w") as f:
         json.dump(data, f, indent=4)
-
+        
 def lottery_draw():
     lottery_data = load_lottery()
     jackpot = lottery_data.get("Jackpot", 100000)
@@ -37,41 +37,37 @@ def lottery_draw():
     drawn_set = set(drawn_numbers)
     print(f"[Lottery] Drawn Numbers: {drawn_numbers}")
 
+    winners = {1: [], 2: [], 3: [], 4: [], 5: []}
     for ticket in tickets:
         chosen = set(ticket.get("numbers", []))
         if len(chosen) != 5:
-            ticket["raw_multiplier"] = 0
             continue
         matches = len(chosen.intersection(drawn_set))
-        if matches == 1:
-            ticket["raw_multiplier"] = 0.20
-        elif matches == 2:
-            ticket["raw_multiplier"] = 0.40
-        elif matches == 3:
-            ticket["raw_multiplier"] = 0.60
-        elif matches == 4:
-            ticket["raw_multiplier"] = 0.80
-        elif matches == 5:
-            ticket["raw_multiplier"] = 1.00
-        else:
-            ticket["raw_multiplier"] = 0
+        if matches >= 1:
+            #only record tickets with at least one match.
+            winners[matches].append(ticket["user_id"])
 
-    winning_tickets = [t for t in tickets if t["raw_multiplier"] > 0]
-    total_raw = sum(t["raw_multiplier"] for t in winning_tickets)
-
+    total_payout = 0
     payouts = {}
-    if total_raw > 0:
-        for ticket in winning_tickets:
-            payout_fraction = ticket["raw_multiplier"] / total_raw
-            payout = jackpot * payout_fraction
-            uid = ticket["user_id"]
-            payouts[uid] = payouts.get(uid, 0) + payout
+    fixed_percentages = {1: 0.20, 2: 0.40, 3: 0.60, 4: 0.80, 5: 1.00}
 
-    new_jackpot = jackpot - sum(payouts.values()) + 25000
+    for matches, users in winners.items():
+        if users:
+            #the total group allocation is fixed percentage * jackpot.
+            group_allocation = fixed_percentages[matches] * jackpot
+            #each ticket in this group gets an equal share.
+            share = group_allocation / len(users)
+            for uid in users:
+                payouts[uid] = payouts.get(uid, 0) + share
+                total_payout += share
+
+    #calculate the new jackpot 
+    new_jackpot = jackpot - total_payout + 25000
     lottery_data["Jackpot"] = new_jackpot
     lottery_data["Tickets"] = []
     save_lottery(lottery_data)
     return drawn_numbers, payouts
+
 
 class LotteryCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -119,11 +115,11 @@ class LotteryCog(commands.Cog):
         lottery_data = load_lottery()
         jackpot = lottery_data.get("Jackpot", 100000)
         await interaction.response.send_message(f"The current lottery jackpot is {jackpot} Beaned Bucks.", ephemeral=False)
-        
+
     @app_commands.guilds(discord.Object(id=GUILD_ID))
     @app_commands.command(name="lotterydraw", description="Perform the lottery draw. (Restricted to lottery admins.)")
     async def lotterydraw(self, interaction: discord.Interaction):
-        if not any(role.name.lower() == ALLOWED_ROLES for role in interaction.user.roles):
+        if not any(role.name.lower() == "him" for role in interaction.user.roles):
             await interaction.response.send_message("You do not have permission to run the lottery draw.", ephemeral=True)
             return
         drawn_numbers, payouts = lottery_draw()
@@ -169,15 +165,25 @@ class LotteryCog(commands.Cog):
             await channel.send(f"Daily Lottery Draw at 4pm ET:\nDrawn Numbers: {drawn_numbers}\n{winners_msg}")
         else:
             print("Channel not found for lottery.")
-
+                
     async def before_daily_lottery_draw(self):
         now_et = datetime.datetime.now(ZoneInfo("America/New_York"))
         target_et = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
-        if now_et >= target_et:
+        
+        #if we're before 4pm, wait until 4pm.
+        if now_et < target_et:
+            delay = (target_et - now_et).total_seconds()
+        #if we're between 4:00 and 4:05 pm, run immediately.
+        elif now_et <= target_et + datetime.timedelta(minutes=5):
+            delay = 0
+        else:
+            #if we're more than 5 minutes past 4pm, schedule for tomorrow at 4pm.
             target_et += datetime.timedelta(days=1)
-        delay = (target_et - now_et).total_seconds()
-        print(f"Waiting {delay} seconds until next 4pm ET.")
+            delay = (target_et - now_et).total_seconds()
+        
+        print(f"Waiting {delay} seconds until next lottery draw.")
         await asyncio.sleep(delay)
+
 
 async def setup(bot: commands.Bot):
     print("Loading LotteryCog...")
