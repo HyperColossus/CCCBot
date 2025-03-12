@@ -11,10 +11,8 @@ import datetime
 from zoneinfo import ZoneInfo
 from globals import TOKEN, GUILD_ID, TARGET_MEMBER_ID, TARGET_USER_ID, DATA_FILE, ALLOWED_ROLES, STOCK_FILE, STOCK_HISTORY_FILE, UPDATE_INTERVAL_MINUTES, LOTTERY_FILE, AFK_CHANNEL_ID
 
-
 #keys are user IDs (as strings), values are dicts with session data. tracks active VCs
 active_vc_sessions = {}
-
 
 #sset up intents
 intents = discord.Intents.default()
