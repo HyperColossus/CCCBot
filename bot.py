@@ -42,7 +42,7 @@ def update_active_vc_sessions_on_startup():
                             "channel_id": channel.id,
                             "last_alone_update": now if len(non_bots) == 1 else None,
                             "alone_accumulated": datetime.timedelta(0),
-                            "afk": (channel.id == AFK_CHANNEL_ID)
+                            "afk": (channel.id == AFK_CHANNEL_ID or channel.name.lower() == "fuckin dead")
                         }
                         print(f"Added {member.display_name} (ID: {uid}) to active VC sessions.")
 
@@ -73,11 +73,12 @@ async def on_voice_state_update(member, before, after):
 
     #determine if the channel is the AFK channel.
     def is_afk(channel):
-        return channel and channel.id == AFK_CHANNEL_ID
-
+        return channel and (channel.id == AFK_CHANNEL_ID or channel.name.strip().lower() == "fuckin dead")
+    
     #if a user joins a voice channel:
     if before.channel is None and after.channel is not None:
         channel = after.channel
+        print(f"User {member.display_name} joined channel '{channel.name}' (ID: {channel.id}). is_afk: {is_afk(channel)}")
         members = non_bot_members(channel)
         alone = (len(members) == 1)
         #mark session as AFK if channel is the AFK channel.
@@ -209,30 +210,30 @@ async def leaderboard(interaction: discord.Interaction, category: str):
             portfolio_value = sum(stock_prices.get(stock, 0) * shares for stock, shares in portfolio.items())
             networth = balance + portfolio_value
             leaderboard_list.append((user_id, networth))
-        leaderboard_list.sort(key=lambda x: x[1], reverse=True)
         title = "Net Worth Leaderboard"
     elif category == "time":
+        #only include non-AFK voice channel time.
         for user_id, record in data.items():
             vc_time = record.get("vc_time", 0)
             leaderboard_list.append((user_id, vc_time))
-        leaderboard_list.sort(key=lambda x: x[1], reverse=True)
-        title = "Voice Channel Time Leaderboard"
+        title = "Voice Channel Time Leaderboard (Non-AFK)"
     elif category == "timealone":
+        #only include non-AFK alone time.
         for user_id, record in data.items():
             vc_timealone = record.get("vc_timealone", 0)
             leaderboard_list.append((user_id, vc_timealone))
-        leaderboard_list.sort(key=lambda x: x[1], reverse=True)
-        title = "Voice Channel Alone Time Leaderboard"
+        title = "Voice Channel Alone Time Leaderboard (Non-AFK)"
     elif category == "timeafk":
+        #this one shows AFK time.
         for user_id, record in data.items():
             vc_afk = record.get("vc_afk", 0)
             leaderboard_list.append((user_id, vc_afk))
-        leaderboard_list.sort(key=lambda x: x[1], reverse=True)
         title = "AFK Time Leaderboard"
     else:
         await interaction.response.send_message("Invalid category. Please choose networth, time, timealone, or timeafk.", ephemeral=True)
         return
 
+    leaderboard_list.sort(key=lambda x: x[1], reverse=True)
     embed = discord.Embed(title=title, color=discord.Color.gold())
     count = 0
     for user_id, value in leaderboard_list[:10]:
@@ -248,7 +249,6 @@ async def leaderboard(interaction: discord.Interaction, category: str):
             display_value = f"{int(hrs)}h {int(mins)}m {int(secs)}s"
         embed.add_field(name=f"{count}. {name}", value=display_value, inline=False)
     await interaction.response.send_message(embed=embed)
-
 
 @bot.tree.command(
     name="exit",
