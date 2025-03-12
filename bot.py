@@ -9,6 +9,7 @@ import asyncio
 from typing import Optional
 import datetime
 from zoneinfo import ZoneInfo
+from globals import TOKEN, GUILD_ID, TARGET_MEMBER_ID, TARGET_USER_ID, DATA_FILE, ALLOWED_ROLES, STOCK_FILE, STOCK_HISTORY_FILE, UPDATE_INTERVAL_MINUTES, LOTTERY_FILE, AFK_CHANNEL_ID
 
 
 #keys are user IDs (as strings), values are dicts with session data. tracks active VCs
@@ -22,19 +23,6 @@ intents.voice_states = True
 with open("config.json", "r") as f:
     config = json.load(f)
 
-#globals
-TOKEN = config["token"]
-GUILD_ID = int(config["guild_id"])
-TARGET_MEMBER_ID = int(config["target_member_id"])
-GUILD_ID = 569672255508840449  
-TARGET_USER_ID = 398607026176917535
-DATA_FILE = "data.json"
-ALLOWED_ROLES = ["him"]
-STOCK_FILE = "stocks.json"
-STOCK_HISTORY_FILE = "stock_history.json"
-UPDATE_INTERVAL_MINUTES = 20 #changes stock interva
-LOTTERY_FILE = "lottery.json"
-AFK_CHANNEL_ID = 574668552557297666
 current_market_event = None
 
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -632,93 +620,6 @@ async def stocks(interaction: discord.Interaction, stock: Optional[str] = None):
         
         await interaction.response.send_message(msg)
 
-@bot.tree.command(
-    name="help",
-    description="Displays a list of available commands and their descriptions.",
-    guild=discord.Object(id=GUILD_ID)
-)
-async def help_command(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="Beaned Bot Help",
-        color=discord.Color.blue(),
-        description="Below are the commands available, grouped by category."
-    )
-    
-    general = (
-        "**/balance [user]** - Check your Beaned Bucks balance (defaults to your own).\n"
-        "**/leaderboard** - Check the networth, time, timealone, timeafk leaderboards.\n" 
-        "**/daily** - Get your daily beaned bucks.\n"
-        "**/dailyboost** - Get your daily beaned bucks. (boosters only)\n"
-        "**/joinnotification** - Join the notif notifications channel.\n"
-        "**/leavenotification** - Leave the notif notifications channel."
-    )
-    
-    gambling = (
-        "**/blackjack [bet]** - Play a round of Blackjack using your Beaned Bucks.\n"
-        "**/roulette [amount] [bet]** - Play a game of roulette with your bet.\n"
-        "**/wheel [target]** - Timeout a user randomly if you have enough Beaned Bucks or the allowed role."
-    )
-    
-    stocks = (
-        "**/portfolio** - Check your stock portfolio and profit (invested vs. earned).\n"
-        "**/stock [stock name]** - View current stock prices or a specific stock's history.\n"
-        "**/buystock [stock] [price]** - Buy stock at your specified price.\n"
-        "**/sellstock [stock] [price]** - Sell stock at your specified price."
-    )
-    
-    lottery = (
-        "**/lotteryticket [numbers]** - Buy a lottery ticket for 5,000 Beaned Bucks; choose 5 unique numbers (1-60).\n"
-        "**/lotterydraw** - Force a lottery draw (restricted to lottery admins).\n"
-        "**/lotterytotal** - View the current lottery jackpot."
-    )
-    
-    embed.add_field(name="General", value=general, inline=False)
-    embed.add_field(name="Gambling", value=gambling, inline=False)
-    embed.add_field(name="Stocks", value=stocks, inline=False)
-    embed.add_field(name="Lottery", value=lottery, inline=False)
-    
-    await interaction.response.send_message(embed=embed, ephemeral=True)
-
-
-@bot.tree.command(
-    name="work",
-    description="Work and earn between 1 and 250 Beaned Bucks (once every 10 minutes).",
-    guild=discord.Object(id=GUILD_ID)
-)
-async def work(interaction: discord.Interaction):
-    data = load_data()
-    user_id = str(interaction.user.id)
-    now = datetime.datetime.now()
-
-    # Retrieve or initialize user record with default keys.
-    user_record = data.get(user_id, {})
-    user_record.setdefault("balance", 0)
-    user_record.setdefault("last_work", None)
-
-    last_work_str = user_record.get("last_work")
-    if last_work_str:
-        last_work = datetime.datetime.fromisoformat(last_work_str)
-        if now - last_work < datetime.timedelta(minutes=10):
-            remaining = datetime.timedelta(minutes=10) - (now - last_work)
-            minutes = remaining.seconds // 60
-            seconds = remaining.seconds % 60
-            await interaction.response.send_message(
-                f"You can work again in {minutes} minutes and {seconds} seconds.",
-                ephemeral=True
-            )
-            return
-
-    reward = random.randint(1, 250)
-    user_record["balance"] += reward
-    user_record["last_work"] = now.isoformat()
-    data[user_id] = user_record
-    save_data(data)
-    
-    await interaction.response.send_message(
-        f"You worked and earned {reward} Beaned Bucks! Your new balance is {user_record['balance']}.",
-        ephemeral=True
-    )
-
 
 #in your blackjack command, after validating the bet:
 def is_blackjack(hand):
@@ -818,175 +719,7 @@ async def blackjack(interaction: discord.Interaction, bet: str):
     except Exception as e:
         print(f"[Blackjack] Error sending followup message: {e}")
 
-
-# --- Daily Slash Command ---
-@bot.tree.command(
-    name="daily",
-    description="Claim your daily reward of 1000-3000 Beaned Bucks (once every 24 hours).",
-    guild=discord.Object(id=GUILD_ID)
-)
-async def daily(interaction: discord.Interaction):
-    data = load_data()
-    user_id = str(interaction.user.id)
-    now = datetime.datetime.now()
-    
-    #retrieve or initialize user record with a default balance of 0.
-    user_record = data.get(user_id, {})
-    user_record.setdefault("balance", 0)
-    user_record.setdefault("last_daily", None)
-    
-    #check if the user has already claimed within the last 24 hours.
-    last_daily_str = user_record.get("last_daily")
-    if last_daily_str:
-        last_daily = datetime.datetime.fromisoformat(last_daily_str)
-        if now - last_daily < datetime.timedelta(days=1):
-            remaining = datetime.timedelta(days=1) - (now - last_daily)
-        
-            # Calculate the remaining hours, minutes, and seconds
-            remaining_hours = remaining.seconds // 3600  # Get the number of whole hours
-            remaining_minutes = (remaining.seconds % 3600) // 60  # Get the remaining minutes after hours are accounted for
-            remaining_seconds = remaining.seconds % 60  # Get the remaining seconds after minutes are accounted for
-        
-            # Send the response with the calculated time left
-            await interaction.response.send_message(
-            f"You have already claimed your daily reward. Try again in {remaining_hours} hours, {remaining_minutes} minutes, and {remaining_seconds} seconds.",
-            ephemeral=True
-            )
-            return
-
-    #award a random amount between 500 and 1000 Beaned Bucks.
-    reward = random.randint(1000, 5000)
-    user_record["balance"] += reward
-    user_record["last_daily"] = now.isoformat()
-    data[user_id] = user_record
-    save_data(data)
-    
-    await interaction.response.send_message(
-        f"You received {reward} Beaned Bucks! Your new balance is {user_record['balance']}.",
-        ephemeral=True
-    )
-
-
-# --- Wheel Slash Command ---
-@bot.tree.command(name="wheel", description="Timeout a user randomly with varying durations if you have at least 10,000 Beaned Bucks.", guild=discord.Object(id=GUILD_ID))
-@app_commands.describe(target="The user to be timed out")
-async def wheel(interaction: discord.Interaction, target: discord.Member):
-    invoker = interaction.user
-    has_allowed_role = any(role.name.lower() in [r.lower() for r in ALLOWED_ROLES] for role in invoker.roles)
-    data = load_data()
-    user_id = str(invoker.id)
-    user_balance = data.get(user_id, {}).get("balance", 0)
-    if not has_allowed_role:
-        if user_balance < 25000:
-            await interaction.response.send_message("You do not have permission to use this command. You must either have one of the allowed roles or at least 10,000 Beaned Bucks.", ephemeral=True)
-            return
-        else:
-            data[user_id]["balance"] = user_balance - 25000
-            save_data(data)
-    options = [
-        (60, "60 seconds"),
-        (300, "5 minutes"),
-        (600, "10 minutes"),
-        (3600, "1 hour"),
-        (86400, "1 day"),
-        (604800, "1 week"),
-    ]
-    weights = [55, 20, 15, 5, 4, 1]
-    duration_seconds, label = random.choices(options, weights=weights, k=1)[0]
-    timeout_until = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=duration_seconds)
-    try:
-        await target.timeout(timeout_until)
-        await interaction.response.send_message(f"{target.mention} has been timed out for {label}!")
-    except Exception as e:
-        print(f"Error during timeout: {e}")
-
-        await interaction.response.send_message("Failed to timeout the user. Check my permissions.", ephemeral=True)
-@bot.tree.command(
-    name="dailyboost",
-    description="Claim your daily booster reward (5,000-15,000 Beaned Bucks) if you are a Server Booster.",
-    guild=discord.Object(id=GUILD_ID)
-)
-async def dailyboost(interaction: discord.Interaction):
-    #check if the user is a server booster.
-    if interaction.user.premium_since is None:
-        await interaction.response.send_message("You must be a Server Booster to claim this reward.", ephemeral=True)
-        return
-
-    data = load_data()
-    user_id = str(interaction.user.id)
-    now = datetime.datetime.now()
-
-    #retrieve or initialize user record with default keys.
-    user_record = data.get(user_id, {})
-    user_record.setdefault("balance", 0)
-    user_record.setdefault("last_daily_boost", None)
-
-    last_boost_str = user_record.get("last_daily_boost")
-    if last_boost_str:
-        last_boost = datetime.datetime.fromisoformat(last_boost_str)
-        if now - last_boost < datetime.timedelta(days=1):
-            remaining = datetime.timedelta(days=1) - (now - last_boost)
-            # Calculate the remaining hours, minutes, and seconds
-            remaining_hours = remaining.seconds // 3600  # Get the number of whole hours
-            remaining_minutes = (remaining.seconds % 3600) // 60  # Get the remaining minutes after hours are accounted for
-            remaining_seconds = remaining.seconds % 60  # Get the remaining seconds after minutes are accounted for
-            await interaction.response.send_message(
-                f"You have already claimed your daily booster reward. Try again in {remaining_hours} hours, {remaining_minutes} minutes and {remaining_seconds} seconds.",
-                ephemeral=True
-            )
-            return
-
-    reward = random.randint(5000, 10000)
-    user_record["balance"] += reward
-    user_record["last_daily_boost"] = now.isoformat()
-    data[user_id] = user_record
-    save_data(data)
-    
-    await interaction.response.send_message(
-        f"You worked as a booster and earned {reward} Beaned Bucks! Your new balance is {user_record['balance']}.",
-        ephemeral=True
-    )
-
-
-@bot.tree.command(
-    name="pay",
-    description="Transfer Beaned Bucks to another user.",
-    guild=discord.Object(id=GUILD_ID)
-)
-@app_commands.describe(user="The user to transfer Beaned Bucks to", amount="The amount of Beaned Bucks to transfer")
-async def pay(interaction: discord.Interaction, user: discord.Member, amount: int):
-    payer_id = str(interaction.user.id)
-    payee_id = str(user.id)
-    data = load_data()
-
-    #ensure both payer and payee have an entry in the data.
-    if payer_id not in data:
-        data[payer_id] = {"balance": 0}
-    if payee_id not in data:
-        data[payee_id] = {"balance": 0}
-
-    #check that the transfer amount is positive.
-    if amount <= 0:
-        await interaction.response.send_message("Transfer amount must be greater than 0.", ephemeral=True)
-        return
-
-    payer_balance = data[payer_id].get("balance", 0)
-    if payer_balance < amount:
-        await interaction.response.send_message("You do not have enough Beaned Bucks to complete this transfer.", ephemeral=True)
-        return
-
-    #subtract from payer and add to payee.
-    data[payer_id]["balance"] = payer_balance - amount
-    payee_balance = data[payee_id].get("balance", 0)
-    data[payee_id]["balance"] = payee_balance + amount
-
-    save_data(data)
-
-    await interaction.response.send_message(
-        f"You have transferred {amount} Beaned Bucks to {user.display_name}.",
-        ephemeral=False
-    )
-
+  
 # --- Voice State Update Event ---
 @bot.event
 async def on_voice_state_update(member, before, after):
@@ -1093,24 +826,6 @@ async def on_voice_state_update(member, before, after):
                         delta = now - s["last_alone_update"]
                         s["alone_accumulated"] += delta
                         s["last_alone_update"] = None
-
-
-@bot.tree.command(
-    name="balance", 
-    description="Show the Beaned Bucks balance of a user.",
-    guild=discord.Object(id=GUILD_ID)
-)
-@app_commands.describe(user="The user to check balance for (defaults to yourself if not provided).")
-async def balance(interaction: discord.Interaction, user: Optional[discord.Member] = None):
-    #default to the interaction user if no user is specified.
-    target = user or interaction.user
-
-    data = load_data()
-    user_id = str(target.id)
-    user_record = data.get(user_id, {"balance": 0})
-    balance_value = user_record.get("balance", 0)
-    
-    await interaction.response.send_message(f"{target.display_name} has {balance_value} Beaned Bucks.")
 
 # --- Join/Leave Notification Commands ---
 @bot.tree.command(name="joinnotification", description="Join the notif notifications", guild=discord.Object(id=GUILD_ID))
@@ -1552,6 +1267,8 @@ async def before_daily_lottery_draw():
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user} (ID: {bot.user.id})")
+    await bot.load_extension("general")
+    await bot.load_extension("help")
     try:
         synced = await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
         print(f"Synced {len(synced)} command(s).")
@@ -1560,5 +1277,6 @@ async def on_ready():
     update_active_vc_sessions_on_startup()
     stock_market_loop.start()
     daily_lottery_draw.start()
+
 
 bot.run(TOKEN)
