@@ -28,7 +28,7 @@ def load_lottery():
 def save_lottery(data):
     with open(LOTTERY_FILE, "w") as f:
         json.dump(data, f, indent=4)
-        
+
 def lottery_draw():
     lottery_data = load_lottery()
     jackpot = lottery_data.get("Jackpot", 100000)
@@ -78,7 +78,7 @@ class LotteryCog(commands.Cog):
         self.daily_task.start()
 
     @app_commands.guilds(discord.Object(id=GUILD_ID))
-    @app_commands.command(name="lotteryticket", description="Buy a lottery ticket for 5,000 Beaned Bucks. Choose 5 unique numbers from 1 to 60.")
+    @app_commands.command(name="lotteryticket", description="Buy a lottery ticket for 1,000 Beaned Bucks. Choose 5 unique numbers from 1 to 60.")
     async def lotteryticket(self, interaction: discord.Interaction, numbers: str):
         try:
             chosen_numbers = [int(n) for n in numbers.split()]
@@ -93,21 +93,21 @@ class LotteryCog(commands.Cog):
         user_data = load_data()
         user_id = str(interaction.user.id)
         user_record = user_data.get(user_id, {"balance": 0})
-        if user_record.get("balance", 0) < 5000:
+        if user_record.get("balance", 0) < 1000:
             await interaction.response.send_message("You do not have enough Beaned Bucks to buy a lottery ticket.", ephemeral=True)
             return
 
-        user_record["balance"] -= 5000
+        user_record["balance"] -= 1000
         user_data[user_id] = user_record
         save_data(user_data)
 
         lottery_data = load_lottery()
-        lottery_data["Jackpot"] = lottery_data.get("Jackpot", 100000) + 5000
+        lottery_data["Jackpot"] = lottery_data.get("Jackpot", 100000) + 1000
         ticket = {"user_id": user_id, "numbers": sorted(chosen_numbers)}
         lottery_data["Tickets"].append(ticket)
         save_lottery(lottery_data)
 
-        await interaction.response.send_message(f"Ticket purchased with numbers: {sorted(chosen_numbers)}. 5000 Beaned Bucks deducted.", ephemeral=False)
+        await interaction.response.send_message(f"Ticket purchased with numbers: {sorted(chosen_numbers)}. 1000 Beaned Bucks deducted.", ephemeral=False)
 
     @app_commands.guilds(discord.Object(id=GUILD_ID))
     @app_commands.command(name="lotterytotal", description="View the current lottery jackpot.")
