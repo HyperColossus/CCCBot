@@ -94,7 +94,7 @@ class GeneralCog(commands.Cog):
                     f"You were caught, but I couldn't timeout you due to an error: {e}",
                     ephemeral=True
                 )
-                
+    
     @app_commands.guilds(discord.Object(id=GUILD_ID))
     @app_commands.command(name="daily", description="Claim your daily reward of 1000-3000 Beaned Bucks (once every 24 hours).")
     async def daily(self, interaction: discord.Interaction):
