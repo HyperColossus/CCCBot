@@ -24,7 +24,9 @@ class HelpCog(commands.Cog):
             "**/daily** - Get your daily beaned bucks.\n"
             "**/dailyboost** - Get your daily beaned bucks. (boosters only)\n"
             "**/joinnotification** - Join the notif notifications channel.\n"
-            "**/leavenotification** - Leave the notif notifications channel."
+            "**/leavenotification** - Leave the notif notifications channel.\n"
+            "**/work** - Work for Beaned Bucks every 10 minutes,\n"
+            "**/crime** - Commit crime for Beaned Bucks ever 15 minutes."
         )
         
         gambling = (
