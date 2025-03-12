@@ -269,12 +269,19 @@ async def exit(interaction: discord.Interaction):
         alone_time = session["alone_accumulated"]
         if session["last_alone_update"]:
             alone_time += now - session["last_alone_update"]
-        record = data.get(uid, {"vc_time": 0, "vc_timealone": 0})
-        record["vc_time"] = record.get("vc_time", 0) + session_duration.total_seconds()
-        record["vc_timealone"] = record.get("vc_timealone", 0) + alone_time.total_seconds()
+        
+        #check if this session is AFK
+        if session.get("afk"):
+            record = data.get(uid, {"vc_afk": 0})
+            record["vc_afk"] = record.get("vc_afk", 0) + session_duration.total_seconds()
+        else:
+            record = data.get(uid, {"vc_time": 0, "vc_timealone": 0})
+            record["vc_time"] = record.get("vc_time", 0) + session_duration.total_seconds()
+            record["vc_timealone"] = record.get("vc_timealone", 0) + alone_time.total_seconds()
+        
         data[uid] = record
-        #remove this session from the active sessions.
         del active_vc_sessions[uid]
+
     save_data(data)
     await interaction.response.send_message("Shutting down the bot and updating VC trackers...", ephemeral=True)
     await bot.close()
