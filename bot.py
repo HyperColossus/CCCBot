@@ -114,7 +114,6 @@ def choose_new_market_event():
                 duration = random.randint(1, 3)
                 return {"event": event, "duration": duration}
     return None
-
 def update_stock_prices():
     global current_market_event
     data = load_stocks()
@@ -136,13 +135,23 @@ def update_stock_prices():
         old_price = price
 
         if event_type == "rally":
-            #increase all stocks by 10-20%.
-            change_percent = random.uniform(0.10, 0.20)
-            new_price = price * (1 + change_percent)
+            if random.random() < 0.70:
+                change_percent = random.uniform(0.10, 0.20)
+                new_price = price * (1 + change_percent)
+            else:
+                change_percent = random.uniform(0.005, 0.05)
+                if random.random() < 0.5:
+                    change_percent = -change_percent
+                new_price = price * (1 + change_percent)
         elif event_type == "crash":
-            #decrease all stocks by 10-20%
-            change_percent = random.uniform(0.10, 0.20)
-            new_price = price * (1 - change_percent)
+            if random.random() < 0.70:
+                change_percent = random.uniform(0.10, 0.20)
+                new_price = price * (1 - change_percent)
+            else:
+                change_percent = random.uniform(0.005, 0.05)
+                if random.random() < 0.5:
+                    change_percent = -change_percent
+                new_price = price * (1 + change_percent)
         else:
             #normal update.
             if random.random() < 0.01:
@@ -168,7 +177,7 @@ def update_stock_prices():
             history[stock] = []
         history[stock].append({"timestamp": now_iso, "price": new_price})
 
-    #if an event is active, decrease its duration.
+    #decrease event duration if an event is active.
     if current_market_event:
         current_market_event["duration"] -= 1
         if current_market_event["duration"] <= 0:
@@ -179,6 +188,7 @@ def update_stock_prices():
     save_stock_history(history)
     print("Stock prices updated:", data)
     return changes
+
 
 @bot.tree.command(
     name="stockbuy",
@@ -636,6 +646,9 @@ async def help_command(interaction: discord.Interaction):
     
     general = (
         "**/balance [user]** - Check your Beaned Bucks balance (defaults to your own).\n"
+        "**/leaderboard** - Check the networth, time, timealone, timeafk leaderboards.\n" 
+        "**/daily** - Get your daily beaned bucks.\n"
+        "**/dailyboost** - Get your daily beaned bucks. (boosters only)\n"
         "**/joinnotification** - Join the notif notifications channel.\n"
         "**/leavenotification** - Leave the notif notifications channel."
     )
