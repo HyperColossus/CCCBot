@@ -356,6 +356,68 @@ class StocksCog(commands.Cog):
             
             await interaction.response.send_message(msg)
 
+    @app_commands.guilds(discord.Object(id=GUILD_ID))
+    @app_commands.command(name="stockgive", description="Give a stock to another user.")
+    @app_commands.describe(
+    stock="The stock symbol you want to give (e.g. MEN)",
+    quantity="The number of shares you want to give (can be fractional, e.g. 0.68, or type 'all' to give everything)",
+    user="The user you want to  send the stocks to."
+    )
+    async def stockgive(self, interaction: discord.Interaction, stock: str, quantity: str,  user: discord.Member):
+        stock = stock.upper()
+        #load current stock data.
+        stocks_data = load_stocks()
+        if stock not in stocks_data:
+            await interaction.response.send_message("Invalid stock symbol.", ephemeral=True)
+            return
+        
+        #load user data
+        data = load_data()
+        user_id = str(interaction.user.id)
+        user_record = data.get(user_id, {"balance": 0, "portfolio": {}, "total_spent": 0, "total_earned": 0})
+        portfolio = user_record.get("portfolio", {})
+        #load target data
+        target_id = str(user.id)
+        target_record = data.get(target_id, {"balance": 0, "portfolio": {}, "total_spent": 0, "total_earned": 0})
+        target_portfolio = target_record.get("portfolio", {})
+
+        if stock not in portfolio:
+            await interaction.response.send_message("You do not own any shares of that stock.", ephemeral=True)
+            return
+        #determine the quantity to give.
+        try:
+            if quantity.lower() == "all":
+                give_quantity = portfolio[stock]
+            else:
+                give_quantity = float(quantity)
+        except Exception as e:
+            await interaction.response.send_message("Invalid quantity format. Please provide a number or 'all'.", ephemeral=True)
+            return
+
+        if give_quantity <= 0:
+            await interaction.response.send_message("Quantity must be greater than zero.", ephemeral=True)
+            return
+
+        if portfolio[stock] < give_quantity:
+            await interaction.response.send_message("You do not own enough shares of that stock to sell.", ephemeral=True)
+            return
+
+        #update portfolio.
+        portfolio[stock] -= give_quantity
+        if portfolio[stock] <= 0:
+            del portfolio[stock]
+        user_record["portfolio"] = portfolio
+        data[user_id] = user_record
+
+        target_portfolio[stock] = target_portfolio.get(stock, 0) + give_quantity
+        target_record["portfolio"] = target_portfolio
+        data[target_id] = target_record
+
+
+        save_data(data)
+
+        await interaction.response.send_message(
+            f"Successfully gave {user.mention} {give_quantity} shares of {stock}.")
 
 async def setup(bot: commands.Bot):
     print("Loading StocksCog...")
