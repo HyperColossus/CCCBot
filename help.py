@@ -47,11 +47,19 @@ class HelpCog(commands.Cog):
             "**/lotterydraw** - Force a lottery draw (restricted to lottery admins).\n"
             "**/lotterytotal** - View the current lottery jackpot."
         )
+
+        crypto = (
+            "**/crypto [user]** - Shows how many RTX 5090s owned and what is currently being mined.\n"
+            "**/cryptobuy [quantity]** - Buy RTX 5090s using your Beaned Bucks. Each card is $10,000\n"
+            "**/cryptosell [quantity]** - Sell your RTX 5090s for $5,000 Beaned Bucks. Don't complain, they've been used to mine crypto.\n"
+            "**/mine [crypto]** - Decide what crypto you'd like to mine. You will gain 1 coin/card every 5 minutes.\n"
+        )
         
         embed.add_field(name="General", value=general, inline=False)
         embed.add_field(name="Gambling", value=gambling, inline=False)
         embed.add_field(name="Stocks", value=stocks, inline=False)
         embed.add_field(name="Lottery", value=lottery, inline=False)
+        embed.add_field(name="Crypto", value=crypto, inline=False)
         
         await interaction.response.send_message(embed=embed, ephemeral=True)
 

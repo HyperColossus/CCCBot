@@ -93,8 +93,7 @@ class RouletteCog(commands.Cog):
 
         embed = discord.Embed(
             title="Roulette Result",
-            color=discord.Color.purple(),
-            timestamp=datetime.datetime.utcnow()
+            color=discord.Color.purple()
         )
         embed.add_field(name="Outcome", value=str(outcome), inline=True)
         embed.add_field(name="Your Bet", value=choice, inline=True)
