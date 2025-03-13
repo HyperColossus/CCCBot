@@ -137,15 +137,8 @@ class LotteryCog(commands.Cog):
         else:
             winners_msg = "No winning tickets this draw."
         await interaction.response.send_message(f"Drawn Numbers: {drawn_numbers}\n{winners_msg}")
-
+        
     async def daily_lottery_draw(self):
-        now_et = datetime.datetime.now(ZoneInfo("America/New_York"))
-        target_et = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
-        if now_et >= target_et:
-            target_et += datetime.timedelta(days=1)
-        delay = (target_et - now_et).total_seconds()
-        print(f"[Lottery] Waiting {delay} seconds until daily lottery draw.")
-        await asyncio.sleep(delay)
         drawn_numbers, payouts = lottery_draw()
         user_data = load_data()
         winners_msg = ""
@@ -165,7 +158,7 @@ class LotteryCog(commands.Cog):
             await channel.send(f"Daily Lottery Draw at 4pm ET:\nDrawn Numbers: {drawn_numbers}\n{winners_msg}")
         else:
             print("Channel not found for lottery.")
-                
+
     async def before_daily_lottery_draw(self):
         now_et = datetime.datetime.now(ZoneInfo("America/New_York"))
         target_et = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
