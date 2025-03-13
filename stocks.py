@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from globals import STOCK_FILE, STOCK_HISTORY_FILE, UPDATE_INTERVAL_MINUTES, GUILD_ID
 from utils import load_data, save_data
 from typing import Optional
+import pytz
 
 #helper functions for stocks:
 def load_stocks():
@@ -140,9 +141,9 @@ class StocksCog(commands.Cog):
             embed = discord.Embed(
                 title="Stock Market Update",
                 color=discord.Color.blue(),
-                timestamp=datetime.datetime.utcnow()
+                timestamp=datetime.datetime.now(pytz.timezone('America/New_York')) + datetime.timedelta(minutes=20)
             )
-            embed.set_footer(text="Prices update every 20 minute")
+            embed.set_footer(text="Prices update every 20 minutes")
             for stock, change in changes.items():
                 sign = "+" if change["abs"] >= 0 else ""
                 embed.add_field(

@@ -286,6 +286,21 @@ async def exit(interaction: discord.Interaction):
     await interaction.response.send_message("Shutting down the bot and updating VC trackers...", ephemeral=True)
     await bot.close()
 
+@tasks.loop(minutes=5)
+async def execute_mine():
+    data = load_data()
+    for user_id in data:
+        user_record = data.get(user_id, {"graphics_cards": 0, "mining": None, "portfolio": {}})
+        if user_record.get("mining") and user_record.get("graphics_cards"):
+            curr_mining = user_record.get("mining")
+            num_cards = user_record.get("graphics_cards")
+            portfolio = user_record.get("portfolio", {})
+                
+            portfolio[curr_mining] = portfolio.get(curr_mining, 0) + num_cards
+            user_record["portfolio"] = portfolio
+            data[user_id] = user_record
+    save_data(data)
+
 #onready event
 @bot.event
 async def on_ready():
@@ -296,11 +311,13 @@ async def on_ready():
     await bot.load_extension("blackjack")
     await bot.load_extension("lottery")
     await bot.load_extension("roulette")
+    await bot.load_extension("crypto")
     try:
         synced = await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
         print(f"Synced {len(synced)} command(s).")
     except Exception as e:
         print(f"Error syncing commands: {e}")
     update_active_vc_sessions_on_startup()
+    execute_mine.start()
 
 bot.run(TOKEN)
