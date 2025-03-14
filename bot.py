@@ -208,7 +208,7 @@ async def leaderboard(interaction: discord.Interaction, category: str):
             balance = record.get("balance", 0)
             portfolio = record.get("portfolio", {})
             portfolio_value = sum(stock_prices.get(stock, 0) * shares for stock, shares in portfolio.items())
-            networth = balance + portfolio_value
+            networth = balance + portfolio_value + (record.get("graphics_cards") * 10000)
             leaderboard_list.append((user_id, networth))
         title = "Net Worth Leaderboard"
     elif category == "time":
