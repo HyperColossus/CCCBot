@@ -35,7 +35,7 @@ class CryptoCog(commands.Cog):
     @app_commands.guilds(discord.Object(id=GUILD_ID))
     @app_commands.command(name="crypto", description="Shows how many RTX 5090s owned and what is currently being mined.")
     @app_commands.describe(user="The user to check crypto statistics for (defaults to yourself if not provided).")
-    async def balance(self, interaction: discord.Interaction, user: Optional[discord.Member] = None):
+    async def crypto(self, interaction: discord.Interaction, user: Optional[discord.Member] = None):
         target = user or interaction.user
         data = load_data()
         user_id = str(target.id)
