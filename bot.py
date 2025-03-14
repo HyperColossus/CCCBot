@@ -208,7 +208,7 @@ async def leaderboard(interaction: discord.Interaction, category: str):
             balance = record.get("balance", 0)
             portfolio = record.get("portfolio", {})
             portfolio_value = sum(stock_prices.get(stock, 0) * shares for stock, shares in portfolio.items())
-            networth = balance + portfolio_value
+            networth = balance + portfolio_value + (record.get("graphics_cards", 0) * 10000)
             leaderboard_list.append((user_id, networth))
         title = "Net Worth Leaderboard"
     elif category == "time":
@@ -286,25 +286,13 @@ async def exit(interaction: discord.Interaction):
     await interaction.response.send_message("Shutting down the bot and updating VC trackers...", ephemeral=True)
     await bot.close()
 
-@tasks.loop(minutes=5)
-async def execute_mine():
-    data = load_data()
-    for user_id in data:
-        user_record = data.get(user_id, {"graphics_cards": 0, "mining": None, "portfolio": {}})
-        if user_record.get("mining") and user_record.get("graphics_cards"):
-            curr_mining = user_record.get("mining")
-            num_cards = user_record.get("graphics_cards")
-            portfolio = user_record.get("portfolio", {})
-                
-            portfolio[curr_mining] = portfolio.get(curr_mining, 0) + num_cards
-            user_record["portfolio"] = portfolio
-            data[user_id] = user_record
-    save_data(data)
-
 #onready event
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user} (ID: {bot.user.id})")
+    commands = await bot.http.get_global_commands(bot.user.id)
+    for cmd in commands:
+        await bot.http.delete_global_command(bot.user.id, cmd['id'])
     await bot.load_extension("general")
     await bot.load_extension("help")
     await bot.load_extension("stocks")
@@ -318,6 +306,5 @@ async def on_ready():
     except Exception as e:
         print(f"Error syncing commands: {e}")
     update_active_vc_sessions_on_startup()
-    execute_mine.start()
 
 bot.run(TOKEN)

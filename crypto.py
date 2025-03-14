@@ -15,11 +15,27 @@ import pytz
 class CryptoCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self.mine_loop = tasks.loop(minutes=5)(self.execute_mine)
+        self.mine_loop.start()
+
+    async def execute_mine(self):
+        data = load_data()
+        for user_id in data:
+            user_record = data.get(user_id, {"graphics_cards": 0, "mining": None, "portfolio": {}})
+            if user_record.get("mining") and user_record.get("graphics_cards"):
+                curr_mining = user_record.get("mining")
+                num_cards = user_record.get("graphics_cards")
+                portfolio = user_record.get("portfolio", {})
+                
+                portfolio[curr_mining] = portfolio.get(curr_mining, 0) + num_cards
+                user_record["portfolio"] = portfolio
+                data[user_id] = user_record
+        save_data(data)
     
     @app_commands.guilds(discord.Object(id=GUILD_ID))
     @app_commands.command(name="crypto", description="Shows how many RTX 5090s owned and what is currently being mined.")
     @app_commands.describe(user="The user to check crypto statistics for (defaults to yourself if not provided).")
-    async def balance(self, interaction: discord.Interaction, user: Optional[discord.Member] = None):
+    async def crypto(self, interaction: discord.Interaction, user: Optional[discord.Member] = None):
         target = user or interaction.user
         data = load_data()
         user_id = str(target.id)
