@@ -15,6 +15,22 @@ import pytz
 class CryptoCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self.mine_loop = tasks.loop(minutes=5)(self.execute_mine)
+        self.mine_loop.start()
+
+    async def execute_mine(self):
+        data = load_data()
+        for user_id in data:
+            user_record = data.get(user_id, {"graphics_cards": 0, "mining": None, "portfolio": {}})
+            if user_record.get("mining") and user_record.get("graphics_cards"):
+                curr_mining = user_record.get("mining")
+                num_cards = user_record.get("graphics_cards")
+                portfolio = user_record.get("portfolio", {})
+                
+                portfolio[curr_mining] = portfolio.get(curr_mining, 0) + num_cards
+                user_record["portfolio"] = portfolio
+                data[user_id] = user_record
+        save_data(data)
     
     @app_commands.guilds(discord.Object(id=GUILD_ID))
     @app_commands.command(name="crypto", description="Shows how many RTX 5090s owned and what is currently being mined.")

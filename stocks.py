@@ -2,10 +2,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 import json
-import os
 import random
 import datetime
-from zoneinfo import ZoneInfo
 from globals import STOCK_FILE, STOCK_HISTORY_FILE, UPDATE_INTERVAL_MINUTES, GUILD_ID
 from utils import load_data, save_data
 from typing import Optional
