@@ -41,9 +41,9 @@ def save_stock_history(history):
 
 def choose_new_market_event():
     events = [
-        ("none", 0.90),
-        ("rally", 0.05),
-        ("crash", 0.05)
+        ("none", 0.96),
+        ("rally", 0.02),
+        ("crash", 0.02)
     ]
     total_weight = sum(weight for event, weight in events)
     r = random.random() * total_weight
@@ -57,7 +57,6 @@ def choose_new_market_event():
                 duration = random.randint(1, 3)
                 return {"event": event, "duration": duration}
     return None
-
 def update_stock_prices(current_market_event):
     data = load_stocks()
     history = load_stock_history()
@@ -75,36 +74,68 @@ def update_stock_prices(current_market_event):
 
     for stock, price in data.items():
         old_price = price
-        if event_type == "rally":
-            if random.random() < 0.70:
-                change_percent = random.uniform(0.10, 0.20)
-                new_price = price * (1 + change_percent)
+        #check if the stock symbol contains "COIN"
+        is_coin = "COIN" in stock.upper()
+
+        #define the ranges based on whether it's a coin stock or not.
+        if is_coin:
+            #for coin stocks:
+            if event_type == "rally":
+                if random.random() < 0.70:
+                    change_percent = random.uniform(0.10, 0.50)  #rally upward: 10% to 50%
+                    new_price = price * (1 + change_percent)
+                else:
+                    change_percent = random.uniform(0.005, 0.20)  #normal fluctuation: 0.5% to 20%
+                    if random.random() < 0.5:
+                        change_percent = -change_percent
+                    new_price = price * (1 + change_percent)
+            elif event_type == "crash":
+                if random.random() < 0.70:
+                    change_percent = random.uniform(0.10, 0.50)  #crash downward: 10% to 50%
+                    new_price = price * (1 - change_percent)
+                else:
+                    change_percent = random.uniform(0.005, 0.20)
+                    if random.random() < 0.5:
+                        change_percent = -change_percent
+                    new_price = price * (1 + change_percent)
             else:
-                change_percent = random.uniform(0.005, 0.05)
-                if random.random() < 0.5:
-                    change_percent = -change_percent
-                new_price = price * (1 + change_percent)
-        elif event_type == "crash":
-            if random.random() < 0.70:
-                change_percent = random.uniform(0.10, 0.20)
-                new_price = price * (1 - change_percent)
-            else:
-                change_percent = random.uniform(0.005, 0.05)
+                #normal update for coin stocks 0.5% to 20% fluctuation.
+                change_percent = random.uniform(0.005, 0.20)
                 if random.random() < 0.5:
                     change_percent = -change_percent
                 new_price = price * (1 + change_percent)
         else:
-            if random.random() < 0.01:
-                jump_factor = random.uniform(0.5, 0.95)
-                if random.random() < 0.5:
-                    new_price = price * (1 + jump_factor)
+            #for non-coin stocks, use the original percentages.
+            if event_type == "rally":
+                if random.random() < 0.70:
+                    change_percent = random.uniform(0.10, 0.20)
+                    new_price = price * (1 + change_percent)
                 else:
-                    new_price = price * (1 - jump_factor)
+                    change_percent = random.uniform(0.005, 0.05)
+                    if random.random() < 0.5:
+                        change_percent = -change_percent
+                    new_price = price * (1 + change_percent)
+            elif event_type == "crash":
+                if random.random() < 0.70:
+                    change_percent = random.uniform(0.10, 0.20)
+                    new_price = price * (1 - change_percent)
+                else:
+                    change_percent = random.uniform(0.005, 0.05)
+                    if random.random() < 0.5:
+                        change_percent = -change_percent
+                    new_price = price * (1 + change_percent)
             else:
-                change_percent = random.uniform(0.005, 0.05)
-                if random.random() < 0.5:
-                    change_percent = -change_percent
-                new_price = price * (1 + change_percent)
+                if random.random() < 0.01:
+                    jump_factor = random.uniform(0.5, 0.95)
+                    if random.random() < 0.5:
+                        new_price = price * (1 + jump_factor)
+                    else:
+                        new_price = price * (1 - jump_factor)
+                else:
+                    change_percent = random.uniform(0.005, 0.05)
+                    if random.random() < 0.5:
+                        change_percent = -change_percent
+                    new_price = price * (1 + change_percent)
 
         new_price = max(round(new_price, 2), 0.01)
         data[stock] = new_price
@@ -114,7 +145,6 @@ def update_stock_prices(current_market_event):
         if stock not in history:
             history[stock] = []
         history[stock].append({"timestamp": now_iso, "price": new_price})
-
 
     if current_market_event:
         current_market_event["duration"] -= 1
@@ -126,6 +156,7 @@ def update_stock_prices(current_market_event):
     save_stock_history(history)
     print("Stock prices updated:", data)
     return changes, current_market_event
+
 
 class StocksCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
