@@ -305,6 +305,9 @@ async def execute_mine():
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user} (ID: {bot.user.id})")
+    commands = await bot.http.get_global_commands(bot.user.id)
+    for cmd in commands:
+        await bot.http.delete_global_command(bot.user.id, cmd['id'])
     await bot.load_extension("general")
     await bot.load_extension("help")
     await bot.load_extension("stocks")
