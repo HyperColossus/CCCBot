@@ -10,7 +10,6 @@ import os
 from typing import Optional
 from globals import TOKEN, GUILD_ID, TARGET_MEMBER_ID, TARGET_USER_ID, DATA_FILE, ALLOWED_ROLES, STOCK_FILE, STOCK_HISTORY_FILE, UPDATE_INTERVAL_MINUTES, LOTTERY_FILE, AFK_CHANNEL_ID
 
-
 def load_data():
     if not os.path.exists(DATA_FILE):
         return {}

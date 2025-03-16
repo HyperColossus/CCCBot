@@ -252,12 +252,12 @@ async def leaderboard(interaction: discord.Interaction, category: str):
 
 @bot.tree.command(
     name="exit",
-    description="Shut down the bot and update VC trackers. (Restricted to users with the 'him' role.)",
+    description="Shut down the bot and update VC trackers. (Restricted to users with the 'horrible person' role.)",
     guild=discord.Object(id=GUILD_ID)
 )
 async def exit(interaction: discord.Interaction):
-    #check if the invoking user has the "him" role (case-insensitive).
-    if not any(role.name.lower() == "him" for role in interaction.user.roles):
+    #check if the invoking user has the "horrible person" role (case-insensitive).
+    if not any(role.name.lower() == "horrible person" for role in interaction.user.roles):
         await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
         return
 
@@ -300,11 +300,15 @@ async def on_ready():
     await bot.load_extension("lottery")
     await bot.load_extension("roulette")
     await bot.load_extension("crypto")
+    await bot.load_extension("bet")
+    
     try:
         synced = await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
         print(f"Synced {len(synced)} command(s).")
     except Exception as e:
         print(f"Error syncing commands: {e}")
     update_active_vc_sessions_on_startup()
+
+
 
 bot.run(TOKEN)
